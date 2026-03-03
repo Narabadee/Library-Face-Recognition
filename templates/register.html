@@ -1,0 +1,940 @@
+{% extends "base.html" %}
+
+{% block title %}FaceID Registration{% endblock %}
+
+{% block content %}
+<div class="row min-vh-100 align-items-center justify-content-center py-5 faceid-container">
+    <div class="col-lg-10">
+
+        <!-- Welcome Panel -->
+        <div id="welcome-panel" class="glass-panel p-5 text-center animate-fade-in shadow-2xl mx-auto"
+            style="max-width: 600px;">
+            <div class="mb-4">
+                <div class="success-icon-container mb-4"
+                    style="background: transparent; border: 2px solid rgba(0, 210, 255, 0.3); box-shadow: none;">
+                    <svg viewBox="0 0 100 100" class="face-mesh-svg"
+                        style="width: 80px; height: 80px; stroke-width: 1;">
+                        <circle cx="50" cy="50" r="45" stroke-dasharray="2 2" />
+                        <path d="M30 40 Q50 30 70 40 M35 65 Q50 75 65 65 M50 30 L50 75 M30 50 L70 50" />
+                    </svg>
+                </div>
+                <h1 class="display-4 fw-bold text-gradient mb-3">FaceID</h1>
+                <p class="text-secondary lead mb-2">Multi-Angle Face Registration</p>
+                <p class="text-secondary small mb-5">
+                    หันหน้าตามคำแนะนำ – ระบบจะสแกนอัตโนมัติ ไม่ต้องกดปุ่มใดๆ
+                </p>
+            </div>
+            <button id="btn-get-started" class="btn btn-faceid btn-lg px-5 py-3 rounded-pill fw-bold">
+                GET STARTED
+            </button>
+        </div>
+
+        <!-- Registration Interface -->
+        <div id="registration-panel" class="d-none animate-fade-in">
+            <div class="row g-4 justify-content-center align-items-stretch">
+
+                <!-- Camera Panel -->
+                <div class="col-lg-5 d-flex">
+                    <div class="glass-panel p-4 w-100 text-center position-relative overflow-hidden d-flex flex-column">
+
+                        <!-- Step Indicator -->
+                        <div class="d-flex justify-content-center gap-3 mb-3" id="step-indicators">
+                            <div class="step-badge active" data-step="0">
+                                <div class="step-num">1</div>
+                                <div class="step-label">หน้าตรง</div>
+                            </div>
+                            <div class="step-connector"></div>
+                            <div class="step-badge" data-step="1">
+                                <div class="step-num">2</div>
+                                <div class="step-label">ซ้าย</div>
+                            </div>
+                            <div class="step-connector"></div>
+                            <div class="step-badge" data-step="2">
+                                <div class="step-num">3</div>
+                                <div class="step-label">ขวา</div>
+                            </div>
+                        </div>
+
+                        <!-- Camera Area -->
+                        <div class="camera-wrapper shadow-lg mb-3 flex-grow-1 position-relative"
+                            style="min-height: 400px; background: #000; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden;">
+
+                            <!-- Source Selector -->
+                            <div class="position-absolute top-0 start-0 m-3" style="z-index: 20;">
+                                <select id="camera-source"
+                                    class="form-select form-select-sm bg-dark border-0 text-white rounded-pill px-3 py-2 opacity-75">
+                                    <option value="webcam">Webcam</option>
+                                    <option value="entry">Entry Camera</option>
+                                    <option value="exit">Exit Camera</option>
+                                </select>
+                            </div>
+
+                            <video id="video" class="camera-feed w-100 h-100" style="object-fit: cover;" autoplay
+                                playsinline muted></video>
+                            <img id="rtsp-stream" class="w-100 h-100 d-none" style="object-fit: cover;"
+                                alt="RTSP Stream">
+                            <canvas id="canvas" class="d-none"></canvas>
+
+                            <!-- Auto-Capture Overlay -->
+                            <div id="pose-overlay"
+                                class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+                                style="z-index: 10; pointer-events: none;">
+
+                                <!-- Circular Progress Ring -->
+                                <div class="pose-ring-container">
+                                    <svg id="progress-ring" viewBox="0 0 200 200" class="progress-ring-svg">
+                                        <!-- Background ring -->
+                                        <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,0.08)"
+                                            stroke-width="4" />
+                                        <!-- Progress ring -->
+                                        <circle id="ring-progress" cx="100" cy="100" r="90" fill="none" stroke="#00d2ff"
+                                            stroke-width="4" stroke-linecap="round" stroke-dasharray="565.5"
+                                            stroke-dashoffset="565.5" transform="rotate(-90 100 100)"
+                                            style="transition: stroke-dashoffset 0.15s linear;" />
+                                    </svg>
+
+                                    <!-- Pose Direction Arrow -->
+                                    <div id="pose-arrow" class="pose-arrow">
+                                        <div id="arrow-icon" class="arrow-front">
+                                            <svg viewBox="0 0 60 60" width="50" height="50">
+                                                <circle cx="30" cy="30" r="8" fill="rgba(0,210,255,0.3)"
+                                                    stroke="#00d2ff" stroke-width="2" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Status Text -->
+                                <div class="position-absolute bottom-0 start-0 w-100 p-3 text-center">
+                                    <div id="pose-status" class="pose-status-text">
+                                        <span id="pose-main-text"
+                                            class="d-block text-info fw-bold fs-5">เปิดกล้องเพื่อเริ่ม</span>
+                                        <span id="pose-sub-text" class="d-block text-white small opacity-60 mt-1">Open
+                                            camera to begin</span>
+                                    </div>
+                                    <!-- Face Detection Indicator -->
+                                    <div id="face-indicator" class="mt-2 d-none">
+                                        <span class="badge rounded-pill px-3 py-2" id="face-badge">
+                                            <i class="bi bi-eye me-1"></i><span id="face-badge-text">Detecting...</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Flash effect -->
+                            <div id="capture-flash" class="position-absolute top-0 start-0 w-100 h-100 d-none"
+                                style="background: white; z-index: 15; pointer-events: none;"></div>
+                        </div>
+
+                        <!-- Captured Thumbnails -->
+                        <div id="thumbnails-row" class="d-flex justify-content-center flex-wrap gap-2 mb-3">
+                            <div class="thumb-slot" data-index="0">
+                                <div class="thumb-placeholder"><i class="bi bi-person-fill"></i><span>Front</span></div>
+                                <img class="thumb-img d-none" alt="Front">
+                                <div class="thumb-check d-none"><i class="bi bi-check-circle-fill"></i></div>
+                            </div>
+                            <div class="thumb-slot" data-index="1">
+                                <div class="thumb-placeholder"><i class="bi bi-arrow-left"></i><span>Left</span></div>
+                                <img class="thumb-img d-none" alt="Left">
+                                <div class="thumb-check d-none"><i class="bi bi-check-circle-fill"></i></div>
+                            </div>
+                            <div class="thumb-slot" data-index="2">
+                                <div class="thumb-placeholder"><i class="bi bi-arrow-right"></i><span>Right</span></div>
+                                <img class="thumb-img d-none" alt="Right">
+                                <div class="thumb-check d-none"><i class="bi bi-check-circle-fill"></i></div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-center gap-3">
+                            <button id="btn-start-camera" class="btn btn-faceid rounded-pill px-5 btn-lg">
+                                <i class="bi bi-camera-video me-2"></i>Open Camera & Start Scan
+                            </button>
+                            <button id="btn-reset" class="btn btn-outline-warning rounded-pill px-4 btn-lg d-none">
+                                <i class="bi bi-arrow-counterclockwise me-2"></i>Reset All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registration Form Panel -->
+                <div class="col-lg-5 d-flex">
+                    <div class="glass-panel p-5 w-100 d-flex flex-column">
+                        <div class="mb-4">
+                            <h3 class="fw-bold text-white mb-2">Student Information</h3>
+                            <p class="text-secondary small">หันหน้าตามคำแนะนำ – ระบบจะ capture อัตโนมัติ</p>
+                        </div>
+
+                        <!-- Capture Progress -->
+                        <div id="capture-status" class="mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div class="status-dot" id="dot-front"></div>
+                                <span class="text-secondary small">หน้าตรง (Front)</span>
+                                <span id="status-front" class="ms-auto badge bg-secondary">Waiting</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div class="status-dot" id="dot-left"></div>
+                                <span class="text-secondary small">เอียงซ้าย (Left)</span>
+                                <span id="status-left" class="ms-auto badge bg-secondary">Waiting</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <div class="status-dot" id="dot-right"></div>
+                                <span class="text-secondary small">เอียงขวา (Right)</span>
+                                <span id="status-right" class="ms-auto badge bg-secondary">Waiting</span>
+                            </div>
+                            <div class="progress bg-white bg-opacity-10 mb-3" style="height: 6px; border-radius: 10px;">
+                                <div id="overall-progress" class="progress-bar bg-info"
+                                    style="width: 0%; transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+
+                        <form id="register-form">
+                            <div class="mb-4">
+                                <label for="student_id"
+                                    class="form-label small fw-bold text-secondary text-uppercase mb-3 tracking-wider">Registration
+                                    ID</label>
+                                <input type="text"
+                                    class="form-control bg-dark border-white border-opacity-10 rounded-4 text-white p-4"
+                                    id="student_id" placeholder="e.g. 65XXXXXXX"
+                                    style="font-family: 'Inter', sans-serif;" required>
+                            </div>
+                            <div class="mb-5">
+                                <label for="name"
+                                    class="form-label small fw-bold text-secondary text-uppercase mb-3 tracking-wider">Full
+                                    Name</label>
+                                <input type="text"
+                                    class="form-control bg-dark border-white border-opacity-10 rounded-4 text-white p-4"
+                                    id="name" placeholder="e.g. John Smith" style="font-family: 'Inter', sans-serif;"
+                                    required>
+                            </div>
+                            <button type="submit" id="btn-register"
+                                class="btn btn-faceid w-100 py-4 fs-5 rounded-4 shadow-lg mb-3" disabled>
+                                <i class="bi bi-shield-check me-2"></i>Confirm Registration
+                            </button>
+                            <p class="text-center text-secondary small opacity-50">Copyright © 2026 Library IoT System.
+                            </p>
+                        </form>
+                        <div id="result-message" class="mt-3 text-center"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="success-overlay"
+            class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style="background: rgba(0,0,0,0.9); z-index: 3000;">
+            <div class="registration-success-card">
+                <div class="success-icon-container">
+                    <i class="bi bi-hand-thumbs-up-fill"></i>
+                </div>
+                <h1 class="text-info fw-bold mb-3">Successful!</h1>
+                <p class="text-secondary mb-4">Multi-Angle ID Confirmed.</p>
+                <div class="mb-4 text-center">
+                    <div class="position-relative d-inline-block">
+                        <img id="success-avatar" src="" class="rounded-circle shadow-lg border border-3 border-info"
+                            style="width: 120px; height: 120px; object-fit: cover;">
+                        <div
+                            class="position-absolute bottom-0 end-0 bg-success rounded-circle p-2 border border-3 border-dark">
+                            <i class="bi bi-check text-white fs-5"></i>
+                        </div>
+                    </div>
+                    <h3 id="success-name" class="fw-bold text-white mt-3 mb-1">-</h3>
+                    <p class="text-info mb-0 small">Manager / Student</p>
+                </div>
+                <div class="row g-3 mb-4 text-start">
+                    <div class="col-6">
+                        <div class="small text-secondary text-uppercase opacity-50 mb-1">Registration ID:</div>
+                        <div id="success-id" class="fw-bold text-info letter-spacing-1">-</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="small text-secondary text-uppercase opacity-50 mb-1">Images:</div>
+                        <div class="fw-bold text-success">3 angles ✓</div>
+                    </div>
+                </div>
+                <button id="btn-success-close" class="btn btn-outline-secondary w-100 py-3 rounded-pill">Done</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .animate-fade-in {
+        animation: fadeIn 0.8s ease-out forwards;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .tracking-wider {
+        letter-spacing: 2px;
+    }
+
+    .opacity-60 {
+        opacity: 0.6;
+    }
+
+    /* Step Indicators */
+    .step-badge {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.3s ease;
+    }
+
+    .step-num {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.08);
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.4);
+        transition: all 0.3s ease;
+    }
+
+    .step-label {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.35);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+    }
+
+    .step-badge.active .step-num {
+        background: rgba(0, 210, 255, 0.2);
+        border-color: #00d2ff;
+        color: #00d2ff;
+        box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+    }
+
+    .step-badge.active .step-label {
+        color: #00d2ff;
+    }
+
+    .step-badge.done .step-num {
+        background: rgba(40, 167, 69, 0.2);
+        border-color: #28a745;
+        color: #28a745;
+    }
+
+    .step-badge.done .step-label {
+        color: #28a745;
+    }
+
+    .step-connector {
+        width: 40px;
+        height: 2px;
+        background: rgba(255, 255, 255, 0.1);
+        align-self: center;
+        margin-bottom: 22px;
+    }
+
+    /* Pose Ring */
+    .pose-ring-container {
+        position: relative;
+        width: 200px;
+        height: 200px;
+    }
+
+    .progress-ring-svg {
+        width: 100%;
+        height: 100%;
+    }
+
+    .pose-arrow {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pose-status-text {
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Thumbnails */
+    .thumb-slot {
+        width: 90px;
+        height: 70px;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .thumb-slot.captured {
+        border-color: #28a745;
+    }
+
+    .thumb-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: rgba(255, 255, 255, 0.25);
+        font-size: 0.6rem;
+        gap: 2px;
+    }
+
+    .thumb-placeholder i {
+        font-size: 1.1rem;
+    }
+
+    .thumb-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .thumb-check {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        color: #28a745;
+        font-size: 0.9rem;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+    }
+
+    /* Status dots */
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .status-dot.active {
+        background: #00d2ff;
+        box-shadow: 0 0 8px rgba(0, 210, 255, 0.5);
+        animation: pulse-dot 1.5s infinite;
+    }
+
+    .status-dot.done {
+        background: #28a745;
+        box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+    }
+
+    @keyframes pulse-dot {
+
+        0%,
+        100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.3);
+        }
+    }
+
+    /* Flash */
+    @keyframes flash-anim {
+        0% {
+            opacity: 0.8;
+        }
+
+        100% {
+            opacity: 0;
+        }
+    }
+
+    .flash-active {
+        display: block !important;
+        animation: flash-anim 0.3s ease-out forwards;
+    }
+
+    /* Holding glow on ring */
+    #ring-progress.holding {
+        filter: drop-shadow(0 0 8px rgba(0, 210, 255, 0.6));
+    }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ==================== Elements ====================
+    const welcomePanel = document.getElementById('welcome-panel');
+    const registrationPanel = document.getElementById('registration-panel');
+    const btnGetStarted = document.getElementById('btn-get-started');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const btnStartCamera = document.getElementById('btn-start-camera');
+    const btnReset = document.getElementById('btn-reset');
+    const btnRegister = document.getElementById('btn-register');
+    const registerForm = document.getElementById('register-form');
+    const resultMessage = document.getElementById('result-message');
+    const successOverlay = document.getElementById('success-overlay');
+    const btnSuccessClose = document.getElementById('btn-success-close');
+    const cameraSource = document.getElementById('camera-source');
+    const rtspStream = document.getElementById('rtsp-stream');
+
+    const poseMainText = document.getElementById('pose-main-text');
+    const poseSubText = document.getElementById('pose-sub-text');
+    const faceIndicator = document.getElementById('face-indicator');
+    const faceBadge = document.getElementById('face-badge');
+    const faceBadgeText = document.getElementById('face-badge-text');
+    const ringProgress = document.getElementById('ring-progress');
+    const captureFlash = document.getElementById('capture-flash');
+    const arrowIcon = document.getElementById('arrow-icon');
+
+    let stream = null;
+    let poseCheckInterval = null;
+    let isChecking = false;
+
+    // ==================== Multi-Angle State ====================
+    const POSES = [
+        { key: 'front', th: 'มองตรงที่กล้อง', en: 'Look straight at the camera', arrow: 'front', yawMin: -15, yawMax: 15, pitchMin: -15, pitchMax: 15 },
+        { key: 'left', th: 'ค่อยๆ หันหน้าไปทางซ้าย', en: 'Slowly turn your head left', arrow: 'left', yawMin: -999, yawMax: -12, pitchMin: -30, pitchMax: 30 },
+        { key: 'right', th: 'ค่อยๆ หันหน้าไปทางขวา', en: 'Slowly turn your head right', arrow: 'right', yawMin: 12, yawMax: 999, pitchMin: -30, pitchMax: 30 },
+    ];
+
+    let currentStep = 0;
+    let capturedImages = [null, null, null];
+    const statusIds = ['front', 'left', 'right'];
+
+    // Hold tracking
+    const HOLD_DURATION = 1500; // ms to hold pose before capture
+    let holdStart = null;
+    let isHolding = false;
+
+    const RING_CIRCUMFERENCE = 2 * Math.PI * 90; // ~565.5
+
+    // ==================== UI Updates ====================
+    function updateUI() {
+        // Step indicators
+        document.querySelectorAll('.step-badge').forEach((badge, i) => {
+            badge.classList.remove('active', 'done');
+            if (capturedImages[i]) badge.classList.add('done');
+            else if (i === currentStep) badge.classList.add('active');
+        });
+
+        // Thumbnails
+        document.querySelectorAll('.thumb-slot').forEach((slot, i) => {
+            const img = slot.querySelector('.thumb-img');
+            const placeholder = slot.querySelector('.thumb-placeholder');
+            const check = slot.querySelector('.thumb-check');
+            if (capturedImages[i]) {
+                img.src = capturedImages[i]; img.classList.remove('d-none');
+                placeholder.classList.add('d-none'); check.classList.remove('d-none');
+                slot.classList.add('captured');
+            } else {
+                img.classList.add('d-none'); placeholder.classList.remove('d-none');
+                check.classList.add('d-none'); slot.classList.remove('captured');
+            }
+        });
+
+        // Status panel
+        statusIds.forEach((id, i) => {
+            const dot = document.getElementById(`dot-${id}`);
+            const badge = document.getElementById(`status-${id}`);
+            dot.classList.remove('active', 'done');
+            if (capturedImages[i]) {
+                dot.classList.add('done');
+                badge.textContent = '✓ Done'; badge.className = 'ms-auto badge bg-success';
+            } else if (i === currentStep) {
+                dot.classList.add('active');
+                badge.textContent = 'Scanning...'; badge.className = 'ms-auto badge bg-info';
+            } else {
+                badge.textContent = 'Waiting'; badge.className = 'ms-auto badge bg-secondary';
+            }
+        });
+
+        // Overall progress
+        const doneCount = capturedImages.filter(x => x !== null).length;
+        document.getElementById('overall-progress').style.width = `${(doneCount / 3) * 100}%`;
+
+        // Register button
+        btnRegister.disabled = !capturedImages.every(x => x !== null);
+
+        // Update pose guide text
+        if (doneCount >= 3) {
+            poseMainText.textContent = '✅ สแกนครบทุกมุมแล้ว!';
+            poseSubText.textContent = 'All angles captured. Fill in the form.';
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><circle cx="30" cy="30" r="20" fill="rgba(40,167,69,0.3)" stroke="#28a745" stroke-width="2"/><path d="M22 30 L28 36 L38 24" fill="none" stroke="#28a745" stroke-width="3" stroke-linecap="round"/></svg>';
+            ringProgress.style.stroke = '#28a745';
+            ringProgress.style.strokeDashoffset = '0';
+        } else {
+            const pose = POSES[currentStep];
+            poseMainText.textContent = pose.th;
+            poseSubText.textContent = pose.en;
+            updateArrowIcon(pose.arrow);
+            ringProgress.style.stroke = '#00d2ff';
+        }
+
+        // Reset button
+        if (doneCount > 0) {
+            btnReset.classList.remove('d-none');
+        }
+    }
+
+    function updateArrowIcon(direction) {
+        if (direction === 'front') {
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><circle cx="30" cy="30" r="8" fill="rgba(0,210,255,0.3)" stroke="#00d2ff" stroke-width="2"/><circle cx="30" cy="30" r="18" fill="none" stroke="rgba(0,210,255,0.15)" stroke-width="1" stroke-dasharray="3 3"/></svg>';
+        } else if (direction === 'left') {
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><path d="M38 30 L22 30 M22 30 L28 24 M22 30 L28 36" fill="none" stroke="#00d2ff" stroke-width="3" stroke-linecap="round"/></svg>';
+        } else if (direction === 'right') {
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><path d="M22 30 L38 30 M38 30 L32 24 M38 30 L32 36" fill="none" stroke="#00d2ff" stroke-width="3" stroke-linecap="round"/></svg>';
+        } else if (direction === 'up') {
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><path d="M30 38 L30 22 M24 28 L30 22 L36 28" fill="none" stroke="#00d2ff" stroke-width="3" stroke-linecap="round"/></svg>';
+        } else if (direction === 'down') {
+            arrowIcon.innerHTML = '<svg viewBox="0 0 60 60" width="50" height="50"><path d="M30 22 L30 38 M24 32 L30 38 L36 32" fill="none" stroke="#00d2ff" stroke-width="3" stroke-linecap="round"/></svg>';
+        }
+    }
+
+    function setRingProgress(fraction) {
+        const offset = RING_CIRCUMFERENCE * (1 - fraction);
+        ringProgress.style.strokeDashoffset = offset;
+    }
+
+    // ==================== Panel Transition ====================
+    btnGetStarted.addEventListener('click', () => {
+        welcomePanel.classList.add('d-none');
+        registrationPanel.classList.remove('d-none');
+        updateUI();
+    });
+
+    // ==================== Camera ====================
+    async function startCamera() {
+        video.classList.add('d-none');
+        rtspStream.classList.add('d-none');
+        btnStartCamera.classList.add('d-none');
+        faceIndicator.classList.remove('d-none');
+
+        const source = cameraSource.value;
+
+        if (source === 'webcam') {
+            video.classList.remove('d-none');
+            try {
+                if (stream) { stream.getTracks().forEach(track => track.stop()); }
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720, facingMode: 'user' }
+                });
+                video.srcObject = stream;
+                console.log('[FaceID] Webcam stream acquired, waiting for video to be ready...');
+                // Robust: poll until video has dimensions, then start pose detection
+                waitForVideoReady();
+            } catch (err) {
+                alert('Webcam access failed: ' + err.message);
+                btnStartCamera.classList.remove('d-none');
+            }
+        } else {
+            rtspStream.classList.remove('d-none');
+            rtspStream.src = `/video/${source}?t=${new Date().getTime()}`;
+            console.log('[FaceID] RTSP stream started, beginning pose detection...');
+            // Wait a moment for RTSP image to load, then start
+            setTimeout(() => { startPoseDetection(); }, 1500);
+        }
+
+        updateUI();
+    }
+
+    btnStartCamera.addEventListener('click', startCamera);
+    cameraSource.addEventListener('change', () => { if (btnStartCamera.classList.contains('d-none')) startCamera(); });
+
+    // ==================== Wait for Video Ready ====================
+    function waitForVideoReady() {
+        let attempts = 0;
+        const checkReady = setInterval(() => {
+            attempts++;
+            console.log(`[FaceID] Checking video ready... attempt ${attempts}, videoWidth=${video.videoWidth}`);
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                clearInterval(checkReady);
+                console.log(`[FaceID] Video ready! ${video.videoWidth}x${video.videoHeight}. Starting pose detection.`);
+                startPoseDetection();
+            } else if (attempts > 30) {
+                clearInterval(checkReady);
+                console.error('[FaceID] Video never became ready after 30 attempts');
+                // Try starting anyway
+                startPoseDetection();
+            }
+        }, 200);
+    }
+
+    // ==================== Auto-Capture Pose Detection ====================
+    function startPoseDetection() {
+        if (poseCheckInterval) clearInterval(poseCheckInterval);
+        console.log('[FaceID] Pose detection started - polling every 500ms');
+        poseCheckInterval = setInterval(checkPose, 500);
+    }
+
+    function stopPoseDetection() {
+        if (poseCheckInterval) { clearInterval(poseCheckInterval); poseCheckInterval = null; }
+    }
+
+    function captureFrame() {
+        const source = cameraSource.value;
+        if (source === 'webcam') {
+            if (!video.videoWidth) {
+                console.log('[FaceID] captureFrame: video not ready yet (videoWidth=0)');
+                return null;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            return canvas.toDataURL('image/jpeg', 0.6);
+        } else {
+            // RTSP: draw the img element onto canvas
+            if (!rtspStream.naturalWidth) {
+                console.log('[FaceID] captureFrame: RTSP image not loaded yet');
+                return null;
+            }
+            canvas.width = rtspStream.naturalWidth;
+            canvas.height = rtspStream.naturalHeight;
+            canvas.getContext('2d').drawImage(rtspStream, 0, 0);
+            return canvas.toDataURL('image/jpeg', 0.6);
+        }
+    }
+
+    async function checkPose() {
+        if (isChecking) return;
+        if (capturedImages.every(x => x !== null)) { stopPoseDetection(); return; }
+
+        const source = cameraSource.value;
+        let payload = {};
+
+        if (source === 'webcam') {
+            const frame = captureFrame();
+            if (!frame) {
+                console.log('[FaceID] checkPose: no frame captured, skipping');
+                return;
+            }
+            payload = { face_image: frame };
+        } else {
+            // For RTSP, the server captures the frame directly
+            payload = { source: source };
+        }
+
+        isChecking = true;
+
+        try {
+            const res = await fetch('/api/check-pose', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.face_detected) {
+                faceBadge.className = 'badge rounded-pill px-3 py-2 bg-success bg-opacity-75';
+                faceBadgeText.textContent = `Face ✓ Yaw: ${data.yaw}° Pitch: ${data.pitch}°`;
+
+                const pose = POSES[currentStep];
+                const yaw = data.yaw;
+                const pitch = data.pitch;
+
+                // Check if yaw and pitch are in target range
+                const inYawTarget = yaw >= pose.yawMin && yaw <= pose.yawMax;
+                const inPitchTarget = pitch >= pose.pitchMin && pitch <= pose.pitchMax;
+
+                if (inYawTarget && inPitchTarget) {
+                    if (!isHolding) {
+                        holdStart = Date.now();
+                        isHolding = true;
+                        ringProgress.classList.add('holding');
+                    }
+
+                    const elapsed = Date.now() - holdStart;
+                    const progress = Math.min(elapsed / HOLD_DURATION, 1.0);
+                    setRingProgress(progress);
+
+                    poseMainText.textContent = `${pose.th} – ค้างไว้...`;
+                    poseSubText.textContent = `Hold still... ${Math.round(progress * 100)}%`;
+
+                    if (elapsed >= HOLD_DURATION) {
+                        // AUTO-CAPTURE!
+                        await performAutoCapture();
+                    }
+                } else {
+                    resetHold();
+                    // Show guidance
+                    poseMainText.textContent = pose.th;
+                    poseSubText.textContent = pose.en;
+                }
+            } else {
+                faceBadge.className = 'badge rounded-pill px-3 py-2 bg-danger bg-opacity-75';
+                faceBadgeText.textContent = 'No face detected';
+                resetHold();
+            }
+        } catch (e) {
+            console.error('Pose check error:', e);
+        }
+
+        isChecking = false;
+    }
+
+    function resetHold() {
+        isHolding = false;
+        holdStart = null;
+        setRingProgress(0);
+        ringProgress.classList.remove('holding');
+    }
+
+    async function performAutoCapture() {
+        stopPoseDetection(); // Pause during capture
+        resetHold();
+
+        // Flash effect
+        captureFlash.classList.remove('d-none');
+        captureFlash.classList.add('flash-active');
+        setTimeout(() => { captureFlash.classList.remove('flash-active'); captureFlash.classList.add('d-none'); }, 350);
+
+        // Capture high-quality frame
+        const source = cameraSource.value;
+        let imageData = null;
+
+        if (source === 'webcam') {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            imageData = canvas.toDataURL('image/jpeg', 0.9);
+        } else {
+            try {
+                const res = await fetch(`/api/capture/${source}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) imageData = data.image;
+            } catch (err) { console.error('RTSP capture failed:', err); }
+        }
+
+        if (imageData) {
+            capturedImages[currentStep] = imageData;
+
+            // Play success sound (Web Audio API chirp)
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.frequency.value = 880;
+                gain.gain.value = 0.1;
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } catch (e) { }
+
+            if (currentStep < 2) {
+                currentStep++;
+                updateUI();
+                // Brief pause before next pose
+                setTimeout(() => { startPoseDetection(); }, 800);
+            } else {
+                updateUI();
+                // All done — stop camera but keep video for visual
+                poseMainText.textContent = '✅ สแกนครบทุกมุมแล้ว!';
+                poseSubText.textContent = 'กรอกข้อมูลด้านขวาเพื่อลงทะเบียน';
+            }
+        } else {
+            // Retry
+            startPoseDetection();
+        }
+    }
+
+    // ==================== Thumbnail click to retake ====================
+    document.querySelectorAll('.thumb-slot').forEach(slot => {
+        slot.addEventListener('click', () => {
+            const idx = parseInt(slot.dataset.index);
+            if (capturedImages[idx]) {
+                capturedImages[idx] = null;
+                currentStep = idx;
+                updateUI();
+                startPoseDetection();
+            }
+        });
+    });
+
+    // ==================== Reset ====================
+    btnReset.addEventListener('click', () => {
+        capturedImages = [null, null, null];
+        currentStep = 0;
+        btnRegister.disabled = true;
+        resetHold();
+        updateUI();
+        startPoseDetection();
+    });
+
+    // ==================== Register ====================
+    registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const studentId = document.getElementById('student_id').value.trim();
+        const name = document.getElementById('name').value.trim();
+
+        if (!capturedImages.every(x => x !== null)) {
+            showMessage('❌ กรุณารอให้ระบบสแกนครบทุกมุม (3 มุม)', 'danger');
+            return;
+        }
+
+        btnRegister.disabled = true;
+        btnRegister.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing 3 angles...';
+
+        try {
+            const response = await fetch('/api/register-multi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: studentId, name: name, face_images: capturedImages })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('success-avatar').src = capturedImages[0];
+                document.getElementById('success-name').textContent = name;
+                document.getElementById('success-id').textContent = studentId;
+                successOverlay.classList.remove('d-none');
+                registerForm.reset();
+                capturedImages = [null, null, null];
+                currentStep = 0;
+                btnRegister.disabled = true;
+                stopPoseDetection();
+            } else {
+                showMessage(`❌ ${data.message}`, 'danger');
+                btnRegister.disabled = false;
+            }
+        } catch (err) {
+            showMessage('Error: ' + err.message, 'danger');
+            btnRegister.disabled = false;
+        }
+        btnRegister.innerHTML = '<i class="bi bi-shield-check me-2"></i>Confirm Registration';
+    });
+
+    // ==================== Success Close ====================
+    btnSuccessClose.addEventListener('click', () => {
+        successOverlay.classList.add('d-none');
+        welcomePanel.classList.remove('d-none');
+        registrationPanel.classList.add('d-none');
+        btnStartCamera.classList.remove('d-none');
+        btnReset.classList.add('d-none');
+        faceIndicator.classList.add('d-none');
+        capturedImages = [null, null, null];
+        currentStep = 0;
+        stopPoseDetection();
+        if (stream) { stream.getTracks().forEach(track => track.stop()); stream = null; }
+    });
+
+    function showMessage(msg, type) {
+        resultMessage.innerHTML = `<div class="alert alert-${type} glass-panel border-0 text-white">${msg}</div>`;
+        setTimeout(() => { resultMessage.innerHTML = ''; }, 5000);
+    }
+</script>
+{% endblock %}

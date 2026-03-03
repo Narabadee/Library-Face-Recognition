@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">ยินดีต้อนรับ, Admin</h2>
+        <p class="text-secondary">นี่คือภาพรวมระบบห้องสมุดของคุณในวันนี้</p>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-5">
+    <div class="col-md-4 animate-up">
+        <div class="card stat-card h-100">
+            <i class="bi bi-people-fill stat-icon-bg"></i>
+            <div class="stat-label text-white opacity-75">นักศึกษาทั้งหมด</div>
+            <div class="stat-value text-gradient">{{ total_students }}</div>
+            <div class="d-flex align-items-center small mt-2">
+                <i class="bi bi-people-fill me-2 text-primary"></i>
+                <span class="text-secondary">ลงทะเบียนแล้ว</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 animate-up">
+        <div class="card stat-card h-100">
+            <i class="bi bi-box-arrow-in-right stat-icon-bg"></i>
+            <div class="stat-label">เข้าใช้งานวันนี้</div>
+            <div class="stat-value" style="color: #38ef7d;">{{ today_checkins }}</div>
+            <div class="d-flex align-items-center small mt-2">
+                <i class="bi bi-box-arrow-in-right me-2 text-success"></i>
+                <span class="text-secondary">Check-in วันนี้</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 animate-up">
+        <div class="card stat-card h-100">
+            <i class="bi bi-person-check-fill stat-icon-bg"></i>
+            <div class="stat-label">อยู่ในห้องสมุด</div>
+            <div class="stat-value" style="color: #ee0979;">
+                <span class="live-dot"></span>{{ currently_inside }}
+            </div>
+            <div class="d-flex align-items-center small mt-2">
+                <i class="bi bi-person-check-fill me-2 text-danger"></i>
+                <span class="text-secondary">กำลังใช้งาน</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0">กิจกรรมล่าสุด</h4>
+            <a href="{{ url_for('history_page') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                ดูทั้งหมด <i class="bi bi-chevron-right ms-1"></i>
+            </a>
+        </div>
+
+        <div class="table-container shadow-lg">
+            <table class="table table-hover table-striped-dark align-middle">
+                <thead>
+                    <tr>
+                        <th>นักศึกษา</th>
+                        <th>รหัส</th>
+                        <th>เข้า</th>
+                        <th>ออก</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-wrapper rounded-circle p-1 me-3"
+                                    style="background: var(--accent-gradient-blue); width: 38px; height: 38px;">
+                                    <img src="/api/student_image/{{ log.student.student_id }}"
+                                        alt="{{ log.student.name }}" class="rounded-circle w-100 h-100"
+                                        style="object-fit: cover; background: var(--bg-sidebar);"
+                                        onerror="this.src='https://ui-avatars.com/api/?name={{ log.student.name }}&background=181821&color=fff'">
+                                </div>
+                                <span class="fw-semibold text-white">{{ log.student.name }}</span>
+                            </div>
+                        </td>
+                        <td><code class="text-info">{{ log.student.student_id }}</code></td>
+                        <td><span class="text-success fw-medium">{{ log.check_in.strftime('%H:%M') }}</span></td>
+                        <td>
+                            {% if log.check_out %}
+                            <span class="text-danger fw-medium">{{ log.check_out.strftime('%H:%M') }}</span>
+                            {% else %}
+                            <span class="opacity-50">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if log.check_out %}
+                            <span
+                                class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">เสร็จสิ้น</span>
+                            {% else %}
+                            <span
+                                class="badge bg-success-subtle text-success border border-success-subtle">กำลังใช้งาน</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-5">
+                            <div class="empty-state-icon mx-auto">
+                                <i class="bi bi-inbox display-6 opacity-50"></i>
+                            </div>
+                            <p class="mb-0 mt-2">ยังไม่มีกิจกรรมในวันนี้</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

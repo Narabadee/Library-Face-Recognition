@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}Zone Configuration{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1"><i class="bi bi-grid-3x3 me-2 text-primary"></i>Zone Configuration</h2>
+        <p class="text-secondary">Click and drag to draw zones on the camera feed</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Canvas Area -->
+    <div class="col-lg-9">
+        <div class="card p-0 overflow-hidden">
+            <div class="card-header d-flex justify-content-between align-items-center px-4 py-3">
+                <span class="fw-bold"><i class="bi bi-camera-video me-2"></i>Entry Camera</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-light active rounded-start-pill" id="cam-entry">Entry</button>
+                    <button class="btn btn-outline-light rounded-end-pill" id="cam-exit">Exit</button>
+                </div>
+            </div>
+            <div class="card-body p-0 position-relative">
+                <img id="camera-feed" src="/video/entry" class="w-100" style="display:block">
+                <canvas id="zone-canvas" class="position-absolute top-0 start-0 w-100 h-100"
+                    style="cursor:crosshair"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="col-lg-3">
+        <div class="card mb-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square me-2 text-primary"></i>Draw Zone</h6>
+            <div class="d-grid gap-2 mb-3">
+                <button class="btn btn-outline-secondary zone-btn rounded-pill" data-zone="1">
+                    <i class="bi bi-1-circle me-2"></i>Zone 1 — Detection
+                </button>
+                <button class="btn btn-outline-info zone-btn rounded-pill" data-zone="2">
+                    <i class="bi bi-2-circle me-2"></i>Zone 2 — Intent
+                </button>
+                <button class="btn btn-outline-warning zone-btn rounded-pill" data-zone="3">
+                    <i class="bi bi-3-circle me-2"></i>Zone 3 — Auth
+                </button>
+            </div>
+            <p class="small text-secondary mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Select a zone, then click on the video to add polygon points.
+            </p>
+            <button class="btn btn-outline-danger btn-sm w-100 rounded-pill" id="btn-clear">
+                <i class="bi bi-trash me-1"></i>Clear All
+            </button>
+        </div>
+
+        <div class="card mb-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-collection me-2 text-primary"></i>Current Zones</h6>
+            <div id="zone-list">
+                <p class="text-secondary small mb-0">No zones defined</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="d-grid gap-2">
+                <button class="btn btn-success rounded-pill" id="btn-save">
+                    <i class="bi bi-save me-2"></i>Save Configuration
+                </button>
+                <a href="/scan/entry" class="btn btn-outline-secondary rounded-pill">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Scan
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #zone-canvas {
+        pointer-events: auto;
+    }
+
+    .zone-btn.active {
+        box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.4);
+        background: rgba(79, 172, 254, 0.1);
+        color: var(--text-primary);
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const canvas = document.getElementById('zone-canvas');
+    const ctx = canvas.getContext('2d');
+    const cameraFeed = document.getElementById('camera-feed');
+    const zoneList = document.getElementById('zone-list');
+
+    let currentCamera = 'entry';
+    let selectedZone = null;
+
+    // Zones storage: { zone_id: [[x, y], [x, y], ...] }
+    let zones = {
+        1: [],  // Detection
+        2: [],  // Intent
+        3: []   // Auth
+    };
+
+    const ZONE_COLORS = {
+        1: 'rgba(128, 128, 128, 0.4)',  // Gray - Detection
+        2: 'rgba(0, 255, 255, 0.4)',    // Cyan - Intent
+        3: 'rgba(255, 255, 0, 0.4)'     // Yellow - Auth
+    };
+    const ZONE_BORDERS = {
+        1: '#888888',
+        2: '#00FFFF',
+        3: '#FFFF00'
+    };
+    const ZONE_NAMES = {
+        1: 'Detection',
+        2: 'Intent',
+        3: 'Auth'
+    };
+
+    // Setup canvas size
+    function resizeCanvas() {
+        canvas.width = cameraFeed.clientWidth;
+        canvas.height = cameraFeed.clientHeight;
+        drawZones();
+    }
+    cameraFeed.onload = resizeCanvas;
+    window.onresize = resizeCanvas;
+
+    // Zone button selection
+    document.querySelectorAll('.zone-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.zone-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedZone = parseInt(btn.dataset.zone);
+        });
+    });
+
+    // Camera switch
+    document.getElementById('cam-entry').addEventListener('click', () => {
+        currentCamera = 'entry';
+        cameraFeed.src = '/video/entry';
+        document.getElementById('cam-entry').classList.add('active');
+        document.getElementById('cam-exit').classList.remove('active');
+        loadZones();
+    });
+    document.getElementById('cam-exit').addEventListener('click', () => {
+        currentCamera = 'exit';
+        cameraFeed.src = '/video/exit';
+        document.getElementById('cam-exit').classList.add('active');
+        document.getElementById('cam-entry').classList.remove('active');
+        loadZones();
+    });
+
+    // Drawing handlers
+    canvas.addEventListener('mousedown', (e) => {
+        if (!selectedZone) {
+            showToast('Please select a zone first', 'warning');
+            return;
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / canvas.width;
+        const y = (e.clientY - rect.top) / canvas.height;
+
+        if (!zones[selectedZone]) zones[selectedZone] = [];
+        zones[selectedZone].push([x, y]);
+
+        drawZones();
+        updateZoneList();
+    });
+
+    // Draw all zones
+    function drawZones() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let zoneId in zones) {
+            const points = zones[zoneId];
+            if (!points || points.length === 0) continue;
+
+            ctx.beginPath();
+            ctx.moveTo(points[0][0] * canvas.width, points[0][1] * canvas.height);
+
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i][0] * canvas.width, points[i][1] * canvas.height);
+            }
+
+            if (points.length >= 3) {
+                ctx.closePath();
+                ctx.fillStyle = ZONE_COLORS[zoneId];
+                ctx.fill();
+            }
+
+            ctx.strokeStyle = ZONE_BORDERS[zoneId];
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw vertices
+            points.forEach((p, idx) => {
+                ctx.fillStyle = ZONE_BORDERS[zoneId];
+                ctx.beginPath();
+                ctx.arc(p[0] * canvas.width, p[1] * canvas.height, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Label
+            const first = points[0];
+            ctx.fillStyle = '#FFF';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText(`ZONE ${zoneId}`, first[0] * canvas.width + 5, first[1] * canvas.height - 10);
+        }
+    }
+
+    // Update zone list display
+    function updateZoneList() {
+        let html = '';
+        for (let zoneId in zones) {
+            const points = zones[zoneId];
+            if (points && points.length > 0) {
+                html += `<div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3" style="background: rgba(255,255,255,0.03);">
+                    <span class="badge rounded-pill px-3" style="background:${ZONE_BORDERS[zoneId]}">Zone ${zoneId} (${points.length} pts)</span>
+                    <button class="btn btn-sm btn-outline-danger rounded-circle" style="width:30px; height:30px; padding:0;" onclick="deleteZone(${zoneId})">
+                        <i class="bi bi-trash" style="font-size:0.75rem;"></i>
+                    </button>
+                </div>`;
+            }
+        }
+        zoneList.innerHTML = html || '<p class="text-secondary small mb-0">No zones defined</p>';
+    }
+
+    // Delete zone
+    window.deleteZone = (zoneId) => {
+        zones[zoneId] = [];
+        drawZones();
+        updateZoneList();
+    };
+
+    // Clear all
+    document.getElementById('btn-clear').addEventListener('click', () => {
+        zones = { 1: [], 2: [], 3: [] };
+        drawZones();
+        updateZoneList();
+    });
+
+    // Save configuration — use toast instead of alert
+    document.getElementById('btn-save').addEventListener('click', async () => {
+        const response = await fetch(`/api/zone/${currentCamera}/areas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ zones: zones })
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast('Zones saved successfully!', 'success');
+        } else {
+            showToast('Failed to save zones', 'danger');
+        }
+    });
+
+    // Load zones from server
+    async function loadZones() {
+        try {
+            const response = await fetch(`/api/zone/${currentCamera}/areas`);
+            const data = await response.json();
+            if (data.zones) {
+                zones = data.zones;
+                drawZones();
+                updateZoneList();
+            }
+        } catch (e) {
+            console.log('No saved zones');
+        }
+    }
+
+    // Initial load
+    loadZones();
+</script>
+{% endblock %}

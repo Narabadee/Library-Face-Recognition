@@ -1,0 +1,49 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Sensitive / user data
+data/faces/
+data/line_config/
+data/zone_config/
+config/zones/
+
+# Database (runtime data)
+*.db
+*.sqlite3
+
+# Large AI model files (too big for GitHub)
+*.onnx
+*.pt
+*.pth
+*.weights
+*.h5
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Compressed archives
+*.zip
+*.tar.gz
+*.rar
+'Compressed

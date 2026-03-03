@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}ประวัติการใช้งาน{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">ประวัติการใช้งาน</h2>
+        <p class="text-secondary">ตรวจสอบบันทึกการเข้า-ออกห้องสมุดย้อนหลัง</p>
+    </div>
+</div>
+
+<!-- Premium Filters -->
+<div class="card mb-5 shadow-sm">
+    <form method="GET" action="{{ url_for('history_page') }}" class="row g-4 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small fw-bold text-secondary text-uppercase mb-2">
+                <i class="bi bi-person me-1"></i> เลือกนักศึกษา
+            </label>
+            <select name="student_id" class="form-select bg-dark border-0 rounded-3 text-white px-3 py-2">
+                <option value="">-- ทั้งหมด --</option>
+                {% for student in students %}
+                <option value="{{ student.student_id }}" {% if filter_student_id==student.student_id %}selected{% endif
+                    %}>
+                    {{ student.name }} ({{ student.student_id }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold text-secondary text-uppercase mb-2">
+                <i class="bi bi-calendar3 me-1"></i> ระบุวันที่
+            </label>
+            <input type="date" name="date" class="form-control bg-dark border-0 rounded-3 text-white px-3 py-2"
+                value="{{ filter_date }}">
+        </div>
+        <div class="col-md-4">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill rounded-pill py-2">
+                    <i class="bi bi-search me-2"></i> ค้นหา
+                </button>
+                <a href="{{ url_for('history_page') }}" class="btn btn-outline-secondary rounded-pill py-2">
+                    <i class="bi bi-x-circle"></i>
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Results Table Container -->
+<div class="table-container shadow-2xl mb-5">
+    <div
+        class="p-4 bg-dark bg-opacity-50 border-bottom border-white border-opacity-5 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0 text-white">รายการบันทึก</h5>
+        <span class="badge bg-primary rounded-pill px-3">{{ logs|length }} รายการ</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-striped-dark align-middle mb-0">
+            <thead>
+                <tr>
+                    <th class="ps-4">รายชื่อนักศึกษา</th>
+                    <th>รหัส</th>
+                    <th>วันที่</th>
+                    <th>เช็คอิน / เช็คเอาท์</th>
+                    <th>ระยะเวลา</th>
+                    <th class="pe-4 text-center">สถานะ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-wrapper rounded-circle p-1 me-3"
+                                style="background: var(--accent-gradient-blue); width: 32px; height: 32px;">
+                                <img src="/api/student_image/{{ log.student.student_id }}" alt="{{ log.student.name }}"
+                                    class="rounded-circle w-100 h-100"
+                                    style="object-fit: cover; background: var(--bg-sidebar);"
+                                    onerror="this.src='https://ui-avatars.com/api/?name={{ log.student.name }}&background=181821&color=fff'">
+                            </div>
+                            <span class="fw-semibold text-white">{{ log.student.name }}</span>
+                        </div>
+                    </td>
+                    <td><code class="text-info opacity-75">{{ log.student.student_id }}</code></td>
+                    <td class="small text-secondary">{{ log.date.strftime('%d/%m/%Y') }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="small">
+                                <i class="bi bi-arrow-right-short text-success"></i>
+                                <span class="fw-medium text-success">{{ log.check_in.strftime('%H:%M') }}</span>
+                            </div>
+                            {% if log.check_out %}
+                            <div class="small">
+                                <i class="bi bi-arrow-left-short text-danger"></i>
+                                <span class="fw-medium text-danger">{{ log.check_out.strftime('%H:%M') }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        {% if log.check_out %}
+                        {% set delta = log.check_out - log.check_in %}
+                        {% set hours = delta.seconds // 3600 %}
+                        {% set minutes = (delta.seconds % 3600) // 60 %}
+                        <span class="badge bg-secondary-subtle text-secondary small border border-secondary-subtle">{{
+                            hours }}h {{ minutes }}m</span>
+                        {% else %}
+                        <span class="text-muted small">--:--</span>
+                        {% endif %}
+                    </td>
+                    <td class="pe-4 text-center">
+                        {% if log.check_out %}
+                        <span
+                            class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 rounded-pill">เสร็จสิ้น</span>
+                        {% else %}
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="live-dot"></span>
+                            <span
+                                class="badge bg-success-subtle text-success border border-success-subtle px-3 rounded-pill">กำลังใช้งาน</span>
+                        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center py-5">
+                        <div class="empty-state-icon mx-auto">
+                            <i class="bi bi-journal-x display-4 opacity-50"></i>
+                        </div>
+                        <p class="text-secondary mt-2 mb-0">ไม่พบข้อมูลประวัติการใช้งาน</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
