@@ -27,6 +27,20 @@ MODEL_FILES = {
     'arcface': 'w600k_r50.onnx'
 }
 
+# Additional models that are not in the buffalo_l package
+EXTRA_MODELS = {
+    'yunet': {
+        'filename': 'face_detection_yunet_2023mar.onnx',
+        'url': 'https://github.com/opencv/opencv_zoo/raw/master/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
+        'target_folder': '.' # Root folder
+    },
+    'yolo': {
+        'filename': 'yolov8n.pt',
+        'url': 'https://github.com/ultralytics/assets/releases/download/v8.1.0/yolov8n.pt',
+        'target_folder': '.' # Root folder
+    }
+}
+
 
 def get_models_folder() -> str:
     """Get the models folder path"""
@@ -128,18 +142,41 @@ def check_models() -> dict:
 
 def ensure_models() -> bool:
     """
-    Ensure models are downloaded and ready.
-    Downloads if not already present.
+    Ensure all models are downloaded and ready.
+    Includes InsightFace, YuNet, and YOLO.
     
     Returns:
-        True if models are ready
+        True if all models are ready
     """
+    # 1. Check/Download InsightFace (buffalo_l)
     status = check_models()
+    if not all(s['available'] for s in status.values()):
+        if not download_buffalo_l():
+            return False
+            
+    # 2. Check/Download Extra Models (YuNet, YOLO)
+    base_folder = os.path.dirname(get_models_folder())
     
-    if all(s['available'] for s in status.values()):
-        return True
-    
-    return download_buffalo_l()
+    for name, info in EXTRA_MODELS.items():
+        target_path = os.path.join(base_folder, info['target_folder'], info['filename'])
+        if not os.path.exists(target_path):
+            logger.info(f"Missing extra model: {info['filename']}")
+            print(f"Downloading {name} model ({info['filename']})...")
+            try:
+                def progress_hook(block_num, block_size, total_size):
+                    if total_size > 0:
+                        progress = min(100, block_num * block_size * 100 / total_size)
+                        print(f"\rProgress: {progress:.1f}%", end='', flush=True)
+                
+                urllib.request.urlretrieve(info['url'], target_path, reporthook=progress_hook)
+                print()
+                logger.info(f"Successfully downloaded {info['filename']}")
+            except Exception as e:
+                logger.error(f"Failed to download {info['filename']}: {e}")
+                print(f"Error downloading {name} model: {e}")
+                return False
+                
+    return True
 
 
 if __name__ == '__main__':

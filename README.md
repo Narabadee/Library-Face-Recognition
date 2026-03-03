@@ -12,12 +12,15 @@ Flask-based face recognition system for university library attendance tracking w
 - **Realtime Scanning** - Continuous automatic check-in/check-out
 - **USB Webcam Support** - Works with standard webcams
 
-## Setup
+## Quick Start (Zero-Setup)
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
+For Windows users, simply run the launcher. It will automatically install Python (if needed), set up a virtual environment, install dependencies, and **download all required AI models**.
+
+1. Download/Clone the repository.
+2. Double-click **`RUN_WINDOWS.bat`**.
+
+Wait for the "🚀 PRODUCTION SERVER STARTING" message, then open:
+**http://localhost:5000**
 
 ## Usage
 
@@ -30,8 +33,8 @@ python app.py
 
 ## Scan Settings
 
-| Setting | Description |
-|---------|-------------|
-| ROI Mode | Darkens outside area, scans only within box |
+| Setting          | Description                                   |
+| ---------------- | --------------------------------------------- |
+| ROI Mode         | Darkens outside area, scans only within box   |
 | Motion Detection | Only scans when movement crosses virtual line |
-| Cooldown | 4 seconds between scans to prevent duplicates |
+| Cooldown         | 4 seconds between scans to prevent duplicates |

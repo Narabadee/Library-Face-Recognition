@@ -1,9 +1,18 @@
 from waitress import serve
 from app import app
+from services.model_manager import ensure_models
 import socket
 import os
 
 if __name__ == '__main__':
+    # Ensure all AI models are downloaded before starting
+    print("Checking system requirements and AI models...")
+    if not ensure_models():
+        print("\n[ERROR] Failed to ensure AI models are present.")
+        print("Please check your internet connection and try again.")
+        input("Press Enter to exit...")
+        exit(1)
+        
     # Get local IP for convenience
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
