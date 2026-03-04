@@ -34,13 +34,8 @@ EXTRA_MODELS = {
         'url': 'https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
         'fallback_url': 'https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx',
         'target_folder': '.' # Root folder
-    },
-    'yolo': {
-        'filename': 'yolov8n.pt',
-        'url': 'https://github.com/ultralytics/assets/releases/download/v8.1.0/yolov8n.pt',
-        'fallback_url': None,
-        'target_folder': '.' # Root folder
     }
+    # yolov8n.onnx is bundled with the repository (no download needed)
 }
 
 
@@ -92,15 +87,16 @@ def download_buffalo_l(force: bool = False) -> bool:
         urllib.request.urlretrieve(BUFFALO_L_URL, zip_path, reporthook=progress_hook)
         print()  # New line
         
-        # Extract only .onnx files directly into models/ folder
-        # (zip may have a buffalo_l/ prefix — we skip it and put files in models/)
+        # Extract only the 2 needed ONNX files directly into models/ folder
+        # (skip unused buffalo_l models: 1k3d68.onnx, 2d106det.onnx, genderage.onnx)
+        NEEDED_MODELS = set(MODEL_FILES.values())  # {'det_10g.onnx', 'w600k_r50.onnx'}
         logger.info("Extracting models...")
         print("Extracting models...")
 
         with zipfile.ZipFile(zip_path, 'r') as zf:
             for member in zf.namelist():
                 filename = os.path.basename(member)
-                if filename.endswith('.onnx') and filename:
+                if filename in NEEDED_MODELS:
                     dest_path = os.path.join(models_folder, filename)
                     with zf.open(member) as src, open(dest_path, 'wb') as dst:
                         dst.write(src.read())

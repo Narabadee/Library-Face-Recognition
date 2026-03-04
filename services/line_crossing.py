@@ -25,13 +25,15 @@ from collections import deque
 
 logger = logging.getLogger(__name__)
 
-# Try to import ultralytics for YOLOv8
-YOLO_AVAILABLE = False
+import onnxruntime as ort
+
+# Check onnxruntime is available for YOLO inference
+ONNX_YOLO_AVAILABLE = False
 try:
-    from ultralytics import YOLO
-    YOLO_AVAILABLE = True
-except ImportError:
-    logger.warning("ultralytics not installed. Run: pip install ultralytics")
+    ort.get_available_providers()
+    ONNX_YOLO_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"onnxruntime not available for YOLO: {e}")
 
 
 @dataclass
@@ -120,7 +122,7 @@ class LineCrossingDetector:
     def __init__(
         self,
         camera_id: str,
-        model_path: str = "yolov8n.pt",
+        model_path: str = "yolov8n.onnx",
         config_folder: str = "data/line_config"
     ):
         """
@@ -135,15 +137,20 @@ class LineCrossingDetector:
         self.config_folder = config_folder
         os.makedirs(config_folder, exist_ok=True)
         
-        # Load YOLOv8 model
+        # Load YOLOv8 ONNX model via onnxruntime
         self.model = None
-        if YOLO_AVAILABLE:
+        self.input_name = None
+        if ONNX_YOLO_AVAILABLE:
             try:
-                logger.info(f"Loading YOLOv8 model: {model_path}")
-                self.model = YOLO(model_path)
+                logger.info(f"Loading YOLOv8 ONNX model: {model_path}")
+                self.model = ort.InferenceSession(
+                    model_path,
+                    providers=['CPUExecutionProvider']
+                )
+                self.input_name = self.model.get_inputs()[0].name
                 logger.info("YOLOv8 model loaded successfully")
             except Exception as e:
-                logger.error(f"Failed to load YOLOv8: {e}")
+                logger.error(f"Failed to load YOLOv8 ONNX model: {e}")
         
         # Import tracker
         from .person_tracker import CentroidTracker
@@ -222,28 +229,63 @@ class LineCrossingDetector:
     
     def detect_persons(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
-        Detect persons in frame using YOLOv8.
-        
+        Detect persons in frame using YOLOv8 ONNX model.
+
         Args:
             frame: BGR image
-            
+
         Returns:
             List of bounding boxes [(x1, y1, x2, y2), ...]
         """
         if self.model is None:
             return []
-        
-        # Run YOLOv8 inference
-        results = self.model(frame, classes=[0], verbose=False)  # class 0 = person
-        
+
+        orig_h, orig_w = frame.shape[:2]
+        input_size = 640
+
+        # Letterbox resize to 640x640
+        scale = min(input_size / orig_w, input_size / orig_h)
+        new_w, new_h = int(orig_w * scale), int(orig_h * scale)
+        resized = cv2.resize(frame, (new_w, new_h))
+        canvas = np.zeros((input_size, input_size, 3), dtype=np.uint8)
+        pad_x = (input_size - new_w) // 2
+        pad_y = (input_size - new_h) // 2
+        canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
+
+        # BGR→RGB, normalize, add batch dim
+        blob = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        blob = blob.transpose(2, 0, 1)[np.newaxis]  # (1, 3, 640, 640)
+
+        # Run ONNX inference
+        output = self.model.run(None, {self.input_name: blob})[0]  # (1, 84, 8400)
+        output = output[0].T  # (8400, 84): cx,cy,w,h + 80 class scores
+
+        # Filter by person class (index 0) confidence
+        person_scores = output[:, 4]   # class 0 score
+        mask = person_scores >= 0.5
+        if not np.any(mask):
+            return []
+
+        boxes_raw = output[mask, :4]   # cx, cy, w, h
+        confs = person_scores[mask]
+
+        # Convert center format → corner format, scale to original image
+        x1 = ((boxes_raw[:, 0] - boxes_raw[:, 2] / 2 - pad_x) / scale).astype(int)
+        y1 = ((boxes_raw[:, 1] - boxes_raw[:, 3] / 2 - pad_y) / scale).astype(int)
+        x2 = ((boxes_raw[:, 0] + boxes_raw[:, 2] / 2 - pad_x) / scale).astype(int)
+        y2 = ((boxes_raw[:, 1] + boxes_raw[:, 3] / 2 - pad_y) / scale).astype(int)
+
+        x1 = np.clip(x1, 0, orig_w); y1 = np.clip(y1, 0, orig_h)
+        x2 = np.clip(x2, 0, orig_w); y2 = np.clip(y2, 0, orig_h)
+
+        # NMS via OpenCV
+        boxes_list = np.stack([x1, y1, x2 - x1, y2 - y1], axis=1).astype(float).tolist()
+        indices = cv2.dnn.NMSBoxes(boxes_list, confs.tolist(), 0.5, 0.45)
+
         detections = []
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                if box.conf[0] >= 0.5:  # Confidence threshold
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    detections.append((x1, y1, x2, y2))
-        
+        if len(indices) > 0:
+            for i in np.array(indices).flatten():
+                detections.append((int(x1[i]), int(y1[i]), int(x2[i]), int(y2[i])))
         return detections
     
     def check_line_crossing(self, person) -> Optional[str]:
@@ -456,7 +498,7 @@ class LineCrossingDetector:
             'net_count': self.in_count - self.out_count,
             'line_configured': self.line is not None,
             'tracker_active': len(self.tracker.objects),
-            'yolo_available': YOLO_AVAILABLE
+            'yolo_available': ONNX_YOLO_AVAILABLE
         }
     
     def get_recent_events(self, limit: int = 20) -> List[Dict]:
