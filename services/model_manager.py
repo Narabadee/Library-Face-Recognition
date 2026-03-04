@@ -92,17 +92,22 @@ def download_buffalo_l(force: bool = False) -> bool:
         urllib.request.urlretrieve(BUFFALO_L_URL, zip_path, reporthook=progress_hook)
         print()  # New line
         
-        # Extract
+        # Extract only .onnx files directly into models/ folder
+        # (zip may have a buffalo_l/ prefix — we skip it and put files in models/)
         logger.info("Extracting models...")
         print("Extracting models...")
-        
+
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            # Extract to parent folder, zip contains buffalo_l/
-            zf.extractall(base)
-        
+            for member in zf.namelist():
+                filename = os.path.basename(member)
+                if filename.endswith('.onnx') and filename:
+                    dest_path = os.path.join(models_folder, filename)
+                    with zf.open(member) as src, open(dest_path, 'wb') as dst:
+                        dst.write(src.read())
+
         # Clean up zip
         os.remove(zip_path)
-        
+
         logger.info("Models downloaded successfully")
         print("Models ready!")
         return True
