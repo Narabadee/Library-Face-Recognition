@@ -35,6 +35,10 @@ try:
 except Exception as e:
     logger.warning(f"onnxruntime not available for YOLO: {e}")
 
+# Backward-compatible alias used by app.py
+YOLO_AVAILABLE = ONNX_YOLO_AVAILABLE
+
+
 
 @dataclass
 class CrossingEvent:

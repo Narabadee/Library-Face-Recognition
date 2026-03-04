@@ -8,8 +8,7 @@ def check_dependencies():
         'cv2', 
         'numpy', 
         'PIL', 
-        'onnxruntime', 
-        'ultralytics'
+        'onnxruntime'
     ]
     
     print("📋 Checking Project Dependencies...")
