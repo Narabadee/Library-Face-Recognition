@@ -31,12 +31,14 @@ MODEL_FILES = {
 EXTRA_MODELS = {
     'yunet': {
         'filename': 'face_detection_yunet_2023mar.onnx',
-        'url': 'https://github.com/opencv/opencv_zoo/raw/master/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
+        'url': 'https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx',
+        'fallback_url': 'https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx',
         'target_folder': '.' # Root folder
     },
     'yolo': {
         'filename': 'yolov8n.pt',
         'url': 'https://github.com/ultralytics/assets/releases/download/v8.1.0/yolov8n.pt',
+        'fallback_url': None,
         'target_folder': '.' # Root folder
     }
 }
@@ -162,18 +164,27 @@ def ensure_models() -> bool:
         if not os.path.exists(target_path):
             logger.info(f"Missing extra model: {info['filename']}")
             print(f"Downloading {name} model ({info['filename']})...")
-            try:
-                def progress_hook(block_num, block_size, total_size):
-                    if total_size > 0:
-                        progress = min(100, block_num * block_size * 100 / total_size)
-                        print(f"\rProgress: {progress:.1f}%", end='', flush=True)
-                
-                urllib.request.urlretrieve(info['url'], target_path, reporthook=progress_hook)
-                print()
-                logger.info(f"Successfully downloaded {info['filename']}")
-            except Exception as e:
-                logger.error(f"Failed to download {info['filename']}: {e}")
-                print(f"Error downloading {name} model: {e}")
+            downloaded = False
+            urls_to_try = [info['url']]
+            if info.get('fallback_url'):
+                urls_to_try.append(info['fallback_url'])
+            for attempt_url in urls_to_try:
+                try:
+                    def progress_hook(block_num, block_size, total_size):
+                        if total_size > 0:
+                            progress = min(100, block_num * block_size * 100 / total_size)
+                            print(f"\rProgress: {progress:.1f}%", end='', flush=True)
+                    
+                    urllib.request.urlretrieve(attempt_url, target_path, reporthook=progress_hook)
+                    print()
+                    logger.info(f"Successfully downloaded {info['filename']}")
+                    downloaded = True
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to download from {attempt_url}: {e}")
+                    print(f"\nRetrying with mirror..." if attempt_url != urls_to_try[-1] else f"\nAll download sources failed for {name} model.")
+            if not downloaded:
+                logger.error(f"Failed to download {info['filename']} from all sources")
                 return False
                 
     return True
