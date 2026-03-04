@@ -22,7 +22,6 @@ config/zones/
 
 # Large AI model files (too big for GitHub)
 *.onnx
-!yolov8n.onnx
 *.pt
 *.pth
 *.weights

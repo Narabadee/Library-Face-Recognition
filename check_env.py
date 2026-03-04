@@ -39,8 +39,7 @@ def check_models():
     
     required_files = [
         'face_detection_yunet_2023mar.onnx',
-        'models/w600k_r50.onnx',
-        'yolov8n.onnx'
+        'models/w600k_r50.onnx'
     ]
     
     all_ok = True
