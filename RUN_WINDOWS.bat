@@ -154,22 +154,32 @@ if defined UV_CMD (
 )
 echo.
 if defined UV_CMD (
-    "!UV_CMD!" pip install -r requirements.txt
+    "!UV_CMD!" pip install -r requirements.txt > install_log.txt 2>&1
 ) else (
-    pip install -r requirements.txt
+    pip install -r requirements.txt > install_log.txt 2>&1
 )
 if !errorlevel! neq 0 (
     echo.
     echo ==================================================
     echo   [ERROR] Dependency installation failed!
+    echo   Actual error:
     echo ==================================================
     echo.
-    echo   This often happens if your Python version is too new.
+    type install_log.txt
     echo.
-    set /p "fix=Install stable Python 3.12 instead? [y/n]: "
-    if /i "!fix!"=="y" goto :INSTALL_PYTHON
+    :: Test if PyPI is reachable
+    curl -s --max-time 5 https://pypi.org >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo.
+        echo   [NETWORK] Cannot reach PyPI ^(pypi.org^).
+        echo   Your internet or firewall may be blocking package downloads.
+    )
+    echo.
+    echo   Full log saved to: %cd%\install_log.txt
+    echo.
     goto :FAIL
 )
+if exist install_log.txt del /f /q install_log.txt
 
 echo.
 echo ==================================================
