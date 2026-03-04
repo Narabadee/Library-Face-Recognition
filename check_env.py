@@ -68,5 +68,5 @@ if __name__ == "__main__":
     elif dep_ok:
         print("⚠️ Dependencies OK, but some models are missing.")
     else:
-        print("❌ Missing dependencies. Run: pip install -r requirements.txt")
+        print("❌ Missing dependencies. Please close this and run RUN_WINDOWS.bat (or START_MAC.command) again.")
     print("="*30)

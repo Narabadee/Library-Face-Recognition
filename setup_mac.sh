@@ -41,6 +41,25 @@ if [ "$PY_MINOR" -gt 12 ]; then
     echo ""
 fi
 
+# 1.5. Install uv (fast package manager)
+UV_CMD=""
+if command -v uv &> /dev/null; then
+    UV_CMD="uv"
+    echo "[OK] uv is already installed. Packages will install fast!"
+elif [ -f "$HOME/.local/bin/uv" ]; then
+    UV_CMD="$HOME/.local/bin/uv"
+    echo "[OK] uv found. Packages will install fast!"
+else
+    echo "[INFO] Installing uv (fast package manager - first-time only)..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1
+    if [ -f "$HOME/.local/bin/uv" ]; then
+        UV_CMD="$HOME/.local/bin/uv"
+        echo "[OK] uv installed. Packages will install up to 10x faster!"
+    else
+        echo "[WARNING] Could not install uv. Using pip instead (standard speed)."
+    fi
+fi
+
 # 2. Handle Virtual Environment
 if [ -d ".venv" ]; then
     if [ ! -f ".venv/bin/activate" ]; then
@@ -53,7 +72,11 @@ fi
 
 if [ ! -d ".venv" ]; then
     echo "[STEP 1/4] Creating virtual environment..."
-    python3 -m venv .venv
+    if [ -n "$UV_CMD" ]; then
+        "$UV_CMD" venv .venv --python python3
+    else
+        python3 -m venv .venv
+    fi
     if [ $? -ne 0 ]; then
         echo "[ERROR] Failed to create virtual environment!"
         return 1 2>/dev/null || exit 1
@@ -72,17 +95,30 @@ if [ $? -ne 0 ]; then
 fi
 echo "[OK] Environment activated."
 
-# 4. Upgrade Pip
-echo "[STEP 3/4] Upgrading pip..."
-pip install --upgrade pip --quiet
-echo "[OK] pip upgraded."
+# 4. Upgrade Pip (skipped when using uv)
+if [ -z "$UV_CMD" ]; then
+    echo "[STEP 3/4] Upgrading pip..."
+    pip install --upgrade pip --quiet
+    echo "[OK] pip upgraded."
+else
+    echo "[STEP 3/4] Skipping pip upgrade (uv handles this automatically)."
+fi
 
 # 5. Install Dependencies
 echo ""
 echo "[STEP 4/4] Installing dependencies..."
-echo "  This might take a few minutes. Please be patient."
+if [ -n "$UV_CMD" ]; then
+    echo "  Using uv for fast installation. This should only take about a minute!"
+else
+    echo "  This might take a few minutes. Please be patient."
+fi
 echo ""
-pip install -r requirements.txt
+
+if [ -n "$UV_CMD" ]; then
+    "$UV_CMD" pip install -r requirements.txt
+else
+    pip install -r requirements.txt
+fi
 
 if [ $? -ne 0 ]; then
     echo ""

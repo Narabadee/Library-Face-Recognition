@@ -86,7 +86,14 @@ if [ $? -ne 0 ]; then
 fi
 
 # Quick dependency check (quiet mode - only install missing)
-pip install -r requirements.txt --quiet 2>/dev/null
+# Use uv if available for faster resolution
+if command -v uv &> /dev/null; then
+    uv pip install -r requirements.txt --quiet 2>/dev/null
+elif [ -f "$HOME/.local/bin/uv" ]; then
+    "$HOME/.local/bin/uv" pip install -r requirements.txt --quiet 2>/dev/null
+else
+    pip install -r requirements.txt --quiet 2>/dev/null
+fi
 
 # 4. System check
 echo ""

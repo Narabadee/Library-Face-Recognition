@@ -1,28 +1,23 @@
 # Face Recognition Attendance System - Dependencies
+# Versions pinned for stability and fast installation with uv
 
 # Web Framework
-flask>=3.0.0
-flask-sqlalchemy>=3.1.1
+flask==3.1.0
+flask-sqlalchemy==3.1.1
 
 # Computer Vision & Image Processing
-opencv-python>=4.8.0
-numpy>=1.26.0
-Pillow>=10.0.0
+opencv-python==4.10.0.84
+numpy==1.26.4
+Pillow==10.4.0
 
-# Face Recognition
-# Option 1: InsightFace (requires Visual C++ Build Tools on Windows)
-# pip install insightface onnxruntime
-# 
-# Option 2: ONNX Runtime only (no compilation required)
-# Uses pre-downloaded ONNX models for RetinaFace and ArcFace
-onnxruntime
+# Face Recognition (ONNX Runtime - no compilation required)
+onnxruntime==1.20.1
 
 # Line Crossing Detection
-ultralytics  # YOLOv8 for person detection
+ultralytics==8.3.55
 
 # Utilities
-scikit-learn
+scikit-learn==1.5.2
 
-# Testing (optional)
 # Production Server
-waitress
+waitress==3.0.2

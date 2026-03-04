@@ -78,6 +78,29 @@ exit /b
 
 :PYTHON_OK
 
+:: ---- Step 0.5: Install uv (fast package installer) ----
+set "UV_CMD="
+where uv >nul 2>&1
+if %errorlevel% equ 0 (
+    set "UV_CMD=uv"
+    echo [OK] uv is already installed. Packages will install fast!
+    goto :FOUND_UV
+)
+if exist "%USERPROFILE%\.local\bin\uv.exe" (
+    set "UV_CMD=%USERPROFILE%\.local\bin\uv.exe"
+    echo [OK] uv found. Packages will install fast!
+    goto :FOUND_UV
+)
+echo [INFO] Installing uv (fast package manager - first-time only)...
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" >nul 2>&1
+if exist "%USERPROFILE%\.local\bin\uv.exe" (
+    set "UV_CMD=%USERPROFILE%\.local\bin\uv.exe"
+    echo [OK] uv installed. Packages will install up to 10x faster!
+    goto :FOUND_UV
+)
+echo [WARNING] Could not install uv. Using pip instead (standard speed).
+:FOUND_UV
+
 :: ---- Step 1: Create Virtual Environment ----
 if exist .venv (
     if not exist ".venv\Scripts\activate.bat" (
@@ -89,7 +112,11 @@ if exist .venv (
 )
 if not exist .venv (
     echo [STEP 1/4] Creating virtual environment...
-    !PY_CMD! -m venv .venv
+    if defined UV_CMD (
+        "!UV_CMD!" venv .venv --python !PY_CMD!
+    ) else (
+        !PY_CMD! -m venv .venv
+    )
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to create virtual environment!
         goto :FAIL
@@ -108,17 +135,29 @@ if !errorlevel! neq 0 (
 )
 echo [OK] Environment activated.
 
-:: ---- Step 3: Upgrade pip ----
-echo [STEP 3/4] Upgrading pip...
-python -m pip install --upgrade pip >nul 2>&1
-echo [OK] pip upgraded.
+:: ---- Step 3: Upgrade pip (skipped when using uv) ----
+if not defined UV_CMD (
+    echo [STEP 3/4] Upgrading pip...
+    python -m pip install --upgrade pip >nul 2>&1
+    echo [OK] pip upgraded.
+) else (
+    echo [STEP 3/4] Skipping pip upgrade ^(uv handles this automatically^).
+)
 
 :: ---- Step 4: Install dependencies ----
 echo.
 echo [STEP 4/4] Installing dependencies...
-echo    This might take a few minutes. Please be patient.
+if defined UV_CMD (
+    echo    Using uv for fast installation. This should only take about a minute!
+) else (
+    echo    This might take a few minutes. Please be patient.
+)
 echo.
-pip install -r requirements.txt
+if defined UV_CMD (
+    "!UV_CMD!" pip install -r requirements.txt
+) else (
+    pip install -r requirements.txt
+)
 if !errorlevel! neq 0 (
     echo.
     echo ==================================================
