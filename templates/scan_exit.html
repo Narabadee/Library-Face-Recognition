@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+
+{% block title %}ทางออก - Check-out{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">ทางออก - Check-out อัตโนมัติ</h2>
+        <p class="text-secondary">วางใบหน้าในกรอบ ROI เพื่อทำการบันทึกเวลาออก</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Camera Section -->
+    <div class="col-lg-8">
+        <div class="camera-wrapper shadow-lg mb-4">
+            <!-- Exit Mode Badge -->
+            <div class="position-absolute top-0 start-0 m-4" style="z-index: 10;">
+                <span class="badge bg-danger bg-opacity-75 backdrop-blur px-3 py-2 rounded-pill">
+                    <i class="bi bi-door-closed-fill me-1"></i> EXIT MODE
+                </span>
+            </div>
+
+            <!-- Scan Line Animation -->
+            <div class="scan-line"></div>
+
+            <!-- RTSP stream (img) -->
+            <img id="camera-feed" class="camera-feed d-none" alt="Camera Feed">
+            <!-- Webcam stream (video) -->
+            <video id="webcam-feed" class="camera-feed d-none" autoplay playsinline muted></video>
+
+            <canvas id="canvas" class="d-none"></canvas>
+            <canvas id="roi-overlay" class="roi-overlay d-none"></canvas>
+
+            <div id="camera-placeholder" class="camera-placeholder">
+                <div class="text-center">
+                    <div class="rounded-circle bg-danger bg-opacity-10 p-4 mb-3 d-inline-block">
+                        <i class="bi bi-camera-video display-4 text-danger"></i>
+                    </div>
+                    <p class="text-secondary" id="placeholder-text">เลือกแหล่งกล้องแล้วกดปุ่มเริ่ม</p>
+                </div>
+            </div>
+
+            <!-- Overlays -->
+            <div id="face-indicator" class="face-indicator d-none">
+                <i class="bi bi-person-check-fill me-2"></i>
+                <span id="face-confidence">-</span>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="card bg-card border-0 mb-4 p-4">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div id="status-display">
+                    <div
+                        class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill border border-secondary-subtle">
+                        <i class="bi bi-record-fill me-2 opacity-50"></i>
+                        <span id="status-text">พร้อมใช้งาน</span>
+                    </div>
+                </div>
+
+                <!-- Camera Source Toggle -->
+                <div class="d-flex align-items-center gap-2" id="source-selector">
+                    <span class="text-secondary small fw-semibold">แหล่งกล้อง:</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Camera source">
+                        <input type="radio" class="btn-check" name="cam-source" id="src-rtsp" value="rtsp" checked>
+                        <label class="btn btn-outline-secondary rounded-start-pill" for="src-rtsp">
+                            <i class="bi bi-hdd-network me-1"></i>RTSP
+                        </label>
+                        <input type="radio" class="btn-check" name="cam-source" id="src-webcam" value="webcam">
+                        <label class="btn btn-outline-danger rounded-end-pill" for="src-webcam">
+                            <i class="bi bi-webcam me-1"></i>Webcam
+                        </label>
+                    </div>
+                </div>
+
+                <div id="camera-controls">
+                    <button id="btn-start" class="btn btn-primary rounded-pill px-4">
+                        <i class="bi bi-play-fill me-1"></i> เริ่มสแกนทางออก
+                    </button>
+                    <button id="btn-stop" class="btn btn-danger rounded-pill px-4 d-none">
+                        <i class="bi bi-stop-fill me-1"></i> หยุด
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="col-lg-4">
+        <!-- Camera Info Card -->
+        <div class="card mb-4 border-0 shadow-sm" id="camera-info-card"
+            style="background: linear-gradient(135deg, #ee0979 0%, #ff6a00 200%);">
+            <div class="card-body p-4 text-white">
+                <h6 class="fw-bold opacity-75 mb-3 text-uppercase small" id="camera-info-title">RTSP Status</h6>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-white bg-opacity-20 p-3">
+                        <i class="bi bi-hdd-network display-6" id="camera-info-icon"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold fs-5" id="camera-info-name">Exit Camera</div>
+                        <div class="opacity-75 small" id="camera-info-detail">IP: 192.168.1.179</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="card mb-4 p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-sliders2 me-2 text-primary"></i>ตั้งค่าการตรวจจับ</h6>
+            <div class="d-flex flex-column gap-3">
+                <div class="form-check form-switch custom-switch">
+                    <input class="form-check-input" type="checkbox" id="enable-roi" checked>
+                    <label class="form-check-label text-secondary" for="enable-roi">Region of Interest (ROI)</label>
+                </div>
+                <div class="form-check form-switch custom-switch">
+                    <input class="form-check-input" type="checkbox" id="enable-motion">
+                    <label class="form-check-label text-secondary" for="enable-motion">Motion Trigger</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Card -->
+        <div class="card p-0 overflow-hidden shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0">Check-out ล่าสุด</h6>
+                <span class="badge bg-danger rounded-pill" style="font-size: 0.65rem;">ONLINE</span>
+            </div>
+            <div id="scan-log" class="scan-log p-3" style="max-height: 400px; overflow-y: auto;">
+                <div class="text-center py-5 opacity-25">
+                    <i class="bi bi-clock-history display-6 mb-2 d-block"></i>
+                    <p class="small">ยังไม่มีข้อมูล</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Fail Feedback Overlays -->
+<style>
+    .camera-wrapper.scan-pulse-green {
+        animation: pulse-green 1.5s ease;
+    }
+
+    .camera-wrapper.scan-pulse-red {
+        animation: pulse-red 1.5s ease;
+    }
+
+    @keyframes pulse-green {
+        0% {
+            box-shadow: 0 0 0 0 rgba(56, 239, 125, 0.7);
+        }
+
+        70% {
+            box-shadow: 0 0 0 30px rgba(56, 239, 125, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(56, 239, 125, 0);
+        }
+    }
+
+    @keyframes pulse-red {
+        0% {
+            box-shadow: 0 0 0 0 rgba(238, 9, 121, 0.7);
+        }
+
+        70% {
+            box-shadow: 0 0 0 30px rgba(238, 9, 121, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(238, 9, 121, 0);
+        }
+    }
+</style>
+
+<div id="success-message" class="d-none position-fixed top-50 start-50 translate-middle" style="z-index: 2000;">
+    <div class="card bg-danger text-white p-5 text-center shadow-2xl scale-up-center"
+        style="border-radius: 30px; border: none; min-width: 350px;">
+        <div class="mb-4">
+            <i class="bi bi-check-circle-fill display-1"></i>
+        </div>
+        <h2 id="success-title" class="fw-bold mb-2">สำเร็จ!</h2>
+        <p id="success-detail" class="lead mb-0 opacity-75">-</p>
+    </div>
+</div>
+
+<style>
+    .roi-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    .camera-placeholder {
+        width: 100%;
+        height: 480px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 18px;
+        border: 2px dashed rgba(255, 255, 255, 0.05);
+    }
+
+    .face-indicator {
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        background: rgba(220, 53, 69, 0.9);
+        backdrop-filter: blur(10px);
+        color: white;
+        padding: 0.7rem 1.2rem;
+        border-radius: 50px;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .scan-log-item {
+        padding: 0.8rem;
+        border-radius: 12px;
+        margin-bottom: 0.8rem;
+        display: flex;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-left: 3px solid #dc3545;
+    }
+
+    .scale-up-center {
+        animation: scale-up-center 0.4s cubic-bezier(0.390, 0.575, 0.565, 1.000) both;
+    }
+
+    @keyframes scale-up-center {
+        0% {
+            transform: scale(0.5) translate(-100%, -100%);
+            opacity: 0;
+        }
+
+        100% {
+            transform: scale(1) translate(-50%, -50%);
+            opacity: 1;
+        }
+    }
+
+    video.camera-feed {
+        width: 100%;
+        height: auto;
+        border-radius: 18px;
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const cameraFeed = document.getElementById('camera-feed');
+    const webcamFeed = document.getElementById('webcam-feed');
+    const canvas = document.getElementById('canvas');
+    const roiOverlay = document.getElementById('roi-overlay');
+    const placeholder = document.getElementById('camera-placeholder');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const statusText = document.getElementById('status-text');
+    const statusDisplay = document.getElementById('status-display');
+    const faceIndicator = document.getElementById('face-indicator');
+    const scanLog = document.getElementById('scan-log');
+    const enableROI = document.getElementById('enable-roi');
+    const enableMotion = document.getElementById('enable-motion');
+    const successMessage = document.getElementById('success-message');
+    const cameraWrapper = document.querySelector('.camera-wrapper');
+    const cameraInfoTitle = document.getElementById('camera-info-title');
+    const cameraInfoIcon = document.getElementById('camera-info-icon');
+    const cameraInfoName = document.getElementById('camera-info-name');
+    const cameraInfoDetail = document.getElementById('camera-info-detail');
+
+    let isScanning = false;
+    let scanInterval = null;
+    let lastScanTime = 0;
+    const SCAN_COOLDOWN = 4000;
+    const ROI = { x: 0.15, y: 0.1, width: 0.7, height: 0.8 };
+
+    // --- Camera Source Selector ---
+    const sourceInputs = document.querySelectorAll('input[name="cam-source"]');
+    let webcamStream = null;
+
+    function getSelectedSource() {
+        for (const input of sourceInputs) {
+            if (input.checked) return input.value;
+        }
+        return 'rtsp';
+    }
+
+    // Update info card when source changes
+    sourceInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            const src = getSelectedSource();
+            if (src === 'webcam') {
+                cameraInfoTitle.textContent = 'Webcam Status';
+                cameraInfoIcon.className = 'bi bi-webcam display-6';
+                cameraInfoName.textContent = 'Local Webcam';
+                cameraInfoDetail.textContent = 'กล้องจากเครื่องนี้';
+            } else {
+                cameraInfoTitle.textContent = 'RTSP Status';
+                cameraInfoIcon.className = 'bi bi-hdd-network display-6';
+                cameraInfoName.textContent = 'Exit Camera';
+                cameraInfoDetail.textContent = 'IP: 192.168.1.179';
+            }
+        });
+    });
+
+    // --- Start / Stop ---
+    btnStart.addEventListener('click', async () => {
+        const source = getSelectedSource();
+        sourceInputs.forEach(i => i.disabled = true);
+
+        if (source === 'webcam') {
+            try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                webcamFeed.srcObject = webcamStream;
+                webcamFeed.classList.remove('d-none');
+                placeholder.classList.add('d-none');
+
+                webcamFeed.onloadedmetadata = () => {
+                    roiOverlay.width = webcamFeed.videoWidth || 640;
+                    roiOverlay.height = webcamFeed.videoHeight || 480;
+                    roiOverlay.classList.remove('d-none');
+                    requestAnimationFrame(drawROI);
+                };
+            } catch (err) {
+                alert('ไม่สามารถเข้าถึง Webcam ได้: ' + err.message);
+                sourceInputs.forEach(i => i.disabled = false);
+                return;
+            }
+        } else {
+            cameraFeed.src = '/video/exit';
+            cameraFeed.classList.remove('d-none');
+            placeholder.classList.add('d-none');
+            cameraFeed.onload = () => {
+                roiOverlay.width = cameraFeed.naturalWidth || 1280;
+                roiOverlay.height = cameraFeed.naturalHeight || 720;
+                roiOverlay.classList.remove('d-none');
+                requestAnimationFrame(drawROI);
+            };
+        }
+
+        btnStart.classList.add('d-none');
+        btnStop.classList.remove('d-none');
+        isScanning = true;
+        updateStatus('กำลังสแกน...', 'danger');
+        scanInterval = setInterval(scanFrame, 1500);
+    });
+
+    btnStop.addEventListener('click', stopScanning);
+
+    function stopScanning() {
+        isScanning = false;
+        if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+
+        cameraFeed.src = '';
+        cameraFeed.classList.add('d-none');
+
+        if (webcamStream) {
+            webcamStream.getTracks().forEach(t => t.stop());
+            webcamStream = null;
+        }
+        webcamFeed.srcObject = null;
+        webcamFeed.classList.add('d-none');
+
+        roiOverlay.classList.add('d-none');
+        placeholder.classList.remove('d-none');
+        faceIndicator.classList.add('d-none');
+        btnStart.classList.remove('d-none');
+        btnStop.classList.add('d-none');
+        sourceInputs.forEach(i => i.disabled = false);
+        updateStatus('หยุดสแกน', 'secondary');
+    }
+
+    function drawROI() {
+        if (!isScanning) return;
+        const ctx = roiOverlay.getContext('2d');
+        const w = roiOverlay.width, h = roiOverlay.height;
+        ctx.clearRect(0, 0, w, h);
+        if (enableROI.checked) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, w, h);
+            const roiX = w * ROI.x, roiY = h * ROI.y, roiW = w * ROI.width, roiH = h * ROI.height;
+            ctx.clearRect(roiX, roiY, roiW, roiH);
+            ctx.strokeStyle = '#dc3545'; ctx.lineWidth = 3;
+            ctx.strokeRect(roiX, roiY, roiW, roiH);
+            ctx.fillStyle = '#dc3545'; ctx.font = '14px Arial';
+            ctx.fillText('📍 วางใบหน้าในกรอบนี้', roiX + 10, roiY - 10);
+        }
+        requestAnimationFrame(drawROI);
+    }
+
+    /** Capture a frame from whichever source is active */
+    async function captureFrame() {
+        const source = getSelectedSource();
+
+        if (source === 'webcam') {
+            canvas.width = webcamFeed.videoWidth || 640;
+            canvas.height = webcamFeed.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(webcamFeed, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.9);
+        } else {
+            const captureResponse = await fetch('/api/capture/exit', { method: 'POST' });
+            const captureData = await captureResponse.json();
+            if (!captureData.success) return null;
+            return captureData.image;
+        }
+    }
+
+    async function scanFrame() {
+        if (!isScanning) return;
+        const now = Date.now();
+        if (now - lastScanTime < SCAN_COOLDOWN) return;
+
+        updateStatus('กำลังประมวลผล...', 'warning');
+
+        try {
+            let imageData = await captureFrame();
+            if (!imageData) { updateStatus('กำลังสแกน...', 'danger'); return; }
+
+            if (enableROI.checked) {
+                const img = new Image();
+                img.src = imageData;
+                await new Promise(resolve => img.onload = resolve);
+                canvas.width = img.width * ROI.width;
+                canvas.height = img.height * ROI.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, img.width * ROI.x, img.height * ROI.y, img.width * ROI.width, img.height * ROI.height, 0, 0, canvas.width, canvas.height);
+                imageData = canvas.toDataURL('image/jpeg', 0.9);
+            }
+
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ face_image: imageData })
+            });
+            const data = await response.json();
+
+            if (data.success && data.confidence >= 0.75) {
+                lastScanTime = now;
+                faceIndicator.classList.remove('d-none');
+                document.getElementById('face-confidence').textContent = (data.confidence * 100).toFixed(1) + '%';
+                if (data.status === 'inside') {
+                    await doCheckout(data.student);
+                } else {
+                    updateStatus(`${data.student.name} ยังไม่ได้ Check-in`, 'warning');
+                    triggerFeedback('fail');
+                    setTimeout(() => updateStatus('กำลังสแกน...', 'danger'), 2000);
+                }
+            } else {
+                faceIndicator.classList.add('d-none');
+                if (data.face_detected) {
+                    triggerFeedback('fail');
+                    updateStatus('ไม่พบข้อมูลนักศึกษา', 'danger');
+                } else {
+                    updateStatus('กำลังสแกน...', 'danger');
+                }
+            }
+        } catch (err) {
+            console.error('Scan error:', err);
+            updateStatus('กำลังสแกน...', 'danger');
+        }
+    }
+
+    async function doCheckout(student) {
+        try {
+            const response = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: student.student_id })
+            });
+            const data = await response.json();
+            if (data.success) {
+                updateStatus('✓ Check-out สำเร็จ!', 'danger');
+                addLogEntry(student, data.log.check_out, data.log.duration);
+                showSuccess('Check-out สำเร็จ!', `${student.name} - ใช้งาน ${data.log.duration || ''}`);
+                triggerFeedback('success');
+            }
+        } catch (err) {
+            console.error('Checkout error:', err);
+        }
+    }
+
+    function triggerFeedback(type) {
+        cameraWrapper.classList.remove('scan-success', 'scan-fail');
+        void cameraWrapper.offsetWidth;
+        cameraWrapper.classList.add(type === 'success' ? 'scan-success' : 'scan-fail');
+        setTimeout(() => cameraWrapper.classList.remove('scan-success', 'scan-fail'), 2000);
+    }
+
+    function updateStatus(text, type) {
+        statusText.textContent = text;
+        statusDisplay.querySelector('.badge').className = `badge bg-${type} fs-5 px-4 py-2 border border-${type}`;
+    }
+
+    function addLogEntry(student, time, duration) {
+        const placeholder = scanLog.querySelector('div.text-center');
+        if (placeholder) placeholder.remove();
+
+        const entry = document.createElement('div');
+        entry.className = 'scan-log-item';
+        entry.innerHTML = `
+            <img src="/api/student_image/${student.student_id}" class="rounded-circle border border-white border-opacity-10" style="width: 40px; height: 40px; object-fit: cover; margin-right: 12px;" onerror="this.src='https://ui-avatars.com/api/?name=${student.name}&background=181821&color=fff'">
+            <div class="flex-grow-1">
+                <div class="fw-bold text-white fs-6">${student.name}</div>
+                <div class="d-flex align-items-center small mt-1">
+                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20 px-2 py-1 rounded-pill" style="font-size: 0.65rem;">CHECK-OUT</span>
+                    <span class="text-secondary ms-2" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>${time}</span>
+                    ${duration ? `<span class="text-info ms-2" style="font-size: 0.75rem;"><i class="bi bi-hourglass-split me-1"></i>${duration}</span>` : ''}
+                </div>
+            </div>
+        `;
+        scanLog.insertBefore(entry, scanLog.firstChild);
+        if (scanLog.children.length > 10) scanLog.removeChild(scanLog.lastChild);
+    }
+
+    function showSuccess(title, detail) {
+        document.getElementById('success-title').textContent = title;
+        document.getElementById('success-detail').textContent = detail;
+        successMessage.classList.remove('d-none');
+        setTimeout(() => {
+            successMessage.classList.add('d-none');
+            updateStatus('กำลังสแกน...', 'danger');
+        }, 2500);
+    }
+</script>
+{% endblock %}

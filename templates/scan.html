@@ -1,0 +1,638 @@
+{% extends "base.html" %}
+
+{% block title %}สแกนใบหน้า Realtime{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1">สแกนใบหน้า Realtime</h2>
+        <p class="text-secondary">วางใบหน้าในกรอบ ROI เพื่อทำการ Check-in/Check-out อัตโนมัติ</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Camera Section -->
+    <div class="col-lg-8">
+        <div class="camera-wrapper shadow-lg mb-4">
+            <!-- Scan Line Animation -->
+            <div class="scan-line"></div>
+
+            <video id="video" class="camera-feed d-none" autoplay playsinline></video>
+            <canvas id="canvas" class="d-none"></canvas>
+            <canvas id="roi-overlay" class="roi-overlay d-none"></canvas>
+
+            <div id="camera-placeholder" class="camera-placeholder">
+                <div class="text-center">
+                    <div class="rounded-circle bg-secondary bg-opacity-10 p-4 mb-3 d-inline-block">
+                        <i class="bi bi-camera-video display-4 text-secondary"></i>
+                    </div>
+                    <p class="text-secondary">กดปุ่มเพื่อเริ่มสแกน</p>
+                </div>
+            </div>
+
+            <!-- Overlays -->
+            <div id="face-indicator" class="face-indicator d-none">
+                <i class="bi bi-person-check-fill me-2"></i>
+                <span id="face-confidence">-</span>
+            </div>
+
+            <div id="motion-indicator" class="motion-indicator d-none">
+                <i class="bi bi-activity me-2"></i> Motion detected
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="card bg-card border-0 mb-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div id="status-display">
+                    <div
+                        class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill border border-secondary-subtle">
+                        <i class="bi bi-record-fill me-2 opacity-50"></i>
+                        <span id="status-text">พร้อมใช้งาน</span>
+                    </div>
+                </div>
+                <div id="camera-controls">
+                    <button id="btn-start-realtime" class="btn btn-primary rounded-pill px-4">
+                        <i class="bi bi-play-fill me-1"></i> เริ่มสแกน
+                    </button>
+                    <button id="btn-stop-realtime" class="btn btn-danger rounded-pill px-4 d-none">
+                        <i class="bi bi-stop-fill me-1"></i> หยุด
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Panel (Student Details + Settings) -->
+    <div class="col-lg-4">
+        <!-- Detection Settings -->
+        <div class="card mb-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-sliders2 me-2 text-primary"></i>ตั้งค่าการตรวจจับ</h6>
+            <div class="d-flex flex-column gap-3">
+                <div class="form-check form-switch custom-switch">
+                    <input class="form-check-input" type="checkbox" id="enable-roi" checked>
+                    <label class="form-check-label text-secondary" for="enable-roi">Region of Interest (ROI)</label>
+                </div>
+                <div class="form-check form-switch custom-switch">
+                    <input class="form-check-input" type="checkbox" id="enable-motion">
+                    <label class="form-check-label text-secondary" for="enable-motion">Motion Trigger</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanning Log (Vertical) -->
+        <div class="card p-0 overflow-hidden shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0">ประวัติสแกนล่าสุด</h6>
+                <span class="badge bg-primary rounded-pill" style="font-size: 0.65rem;">LATEST 10</span>
+            </div>
+            <div id="scan-log" class="scan-log p-3" style="max-height: 400px; overflow-y: auto;">
+                <div class="text-center py-5 opacity-25">
+                    <i class="bi bi-clock-history display-6 mb-2 d-block"></i>
+                    <p class="small">ยังไม่มีข้อมูล</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Floating Result (if found) -->
+<div id="result-overlay" class="d-none">
+    <div class="result-card card shadow-2xl scale-up-center">
+        <div class="text-center mb-4">
+            <div class="result-avatar mx-auto mb-3">
+                <i class="bi bi-person text-white display-6"></i>
+            </div>
+            <h4 id="result-name" class="fw-bold mb-1">-</h4>
+            <p id="result-id" class="text-secondary small mb-0">-</p>
+        </div>
+        <div class="d-flex gap-2">
+            <div
+                class="flex-fill p-3 bg-secondary bg-opacity-5 rounded-3 text-center border border-white border-opacity-5">
+                <div class="small text-secondary mb-1">Confidence</div>
+                <div id="result-confidence" class="fw-bold text-success">-</div>
+            </div>
+            <div
+                class="flex-fill p-3 bg-secondary bg-opacity-5 rounded-3 text-center border border-white border-opacity-5">
+                <div class="small text-secondary mb-1">Status</div>
+                <div id="status-message" class="fw-bold text-primary">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<audio id="success-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"
+    preload="auto"></audio>
+
+<style>
+    .roi-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    .camera-placeholder {
+        width: 100%;
+        height: 480px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 18px;
+        border: 2px dashed rgba(255, 255, 255, 0.05);
+    }
+
+    .face-indicator {
+        position: absolute;
+        top: 1.5rem;
+        right: 1.5rem;
+        background: rgba(16, 185, 129, 0.9);
+        backdrop-filter: blur(10px);
+        color: white;
+        padding: 0.7rem 1.2rem;
+        border-radius: 50px;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .motion-indicator {
+        position: absolute;
+        top: 1.5rem;
+        left: 1.5rem;
+        background: rgba(245, 158, 11, 0.9);
+        backdrop-filter: blur(10px);
+        color: white;
+        padding: 0.6rem 1.2rem;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        animation: pulse 1s infinite;
+    }
+
+    .scan-log-item {
+        padding: 0.8rem;
+        border-radius: 12px;
+        margin-bottom: 0.8rem;
+        display: flex;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.3s ease;
+    }
+
+    .scan-log-item.checkin {
+        border-left: 3px solid #10b981;
+    }
+
+    .scan-log-item.checkout {
+        border-left: 3px solid #ef4444;
+    }
+
+    #result-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+    }
+
+    .result-card {
+        width: 100%;
+        max-width: 400px;
+        padding: 2.5rem !important;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: var(--bg-sidebar) !important;
+    }
+
+    .result-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 20px;
+        background: var(--accent-gradient-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    @keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.6;
+        }
+    }
+
+    .scale-up-center {
+        animation: scale-up-center 0.4s cubic-bezier(0.390, 0.575, 0.565, 1.000) both;
+    }
+
+    @keyframes scale-up-center {
+        0% {
+            transform: scale(0.5);
+            opacity: 0;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const roiOverlay = document.getElementById('roi-overlay');
+    const successMessage = document.getElementById('success-message');
+    const cameraWrapper = document.querySelector('.camera-wrapper');
+    // VIRTUAL_LINE Removed
+
+    const statusText = document.getElementById('status-text');
+    const statusDisplay = document.getElementById('status-display');
+    const faceIndicator = document.getElementById('face-indicator');
+    const motionIndicator = document.getElementById('motion-indicator');
+    const scanLog = document.getElementById('scan-log');
+    const enableROI = document.getElementById('enable-roi');
+    const enableMotion = document.getElementById('enable-motion');
+
+    let stream = null;
+    let currentStudent = null;
+    let isScanning = false;
+    let isProcessing = false; // #2: guard against overlapping requests
+    let scanInterval = null;
+    let lastScanTime = 0;
+    let previousFrame = null;
+    const roiCanvas = document.createElement('canvas'); // #5 perf: reuse across frames
+    const SCAN_COOLDOWN = 4000; // 4 seconds between scans
+    const MOTION_THRESHOLD = 30; // Pixel difference threshold
+    const CONFIDENCE_THRESHOLD = 80; // 80%
+
+    // ROI Configuration (percentage-based)
+    const ROI = {
+        x: 0.15,      // 15% from left
+        y: 0.1,       // 10% from top
+        width: 0.7,   // 70% width
+        height: 0.8   // 80% height
+    };
+
+    // Start realtime scanning
+    btnStartRealtime.addEventListener('click', async () => {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: 1280, height: 720, facingMode: 'user' }
+            });
+            video.srcObject = stream;
+
+            video.onloadedmetadata = () => {
+                video.classList.remove('d-none');
+                placeholder.classList.add('d-none');
+
+                // Setup ROI overlay
+                setupROIOverlay();
+
+                btnStartRealtime.classList.add('d-none');
+                btnStopRealtime.classList.remove('d-none');
+
+                isScanning = true;
+                updateStatus('กำลังสแกน...', 'primary');
+
+                // Start continuous scanning
+                scanInterval = setInterval(scanFrame, 1000);
+
+                // Start drawing ROI
+                requestAnimationFrame(drawROI);
+            };
+
+        } catch (err) {
+            alert('ไม่สามารถเข้าถึงกล้องได้: ' + err.message);
+        }
+    });
+
+    // Stop realtime scanning
+    btnStopRealtime.addEventListener('click', () => {
+        stopScanning();
+    });
+
+    function setupROIOverlay() {
+        roiOverlay.width = video.videoWidth;
+        roiOverlay.height = video.videoHeight;
+        roiOverlay.classList.remove('d-none');
+    }
+
+    function drawROI() {
+        if (!isScanning) return;
+
+        const ctx = roiOverlay.getContext('2d');
+        const w = roiOverlay.width;
+        const h = roiOverlay.height;
+
+        // Clear
+        ctx.clearRect(0, 0, w, h);
+
+        if (enableROI.checked) {
+            // Draw darkened area outside ROI
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, w, h);
+
+            // Clear ROI area
+            const roiX = w * ROI.x;
+            const roiY = h * ROI.y;
+            const roiW = w * ROI.width;
+            const roiH = h * ROI.height;
+
+            ctx.clearRect(roiX, roiY, roiW, roiH);
+
+            // Draw ROI border
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(roiX, roiY, roiW, roiH);
+
+            // Draw corner markers
+            const cornerSize = 20;
+            ctx.strokeStyle = '#38ef7d';
+            ctx.lineWidth = 4;
+
+            // Top-left
+            ctx.beginPath(); ctx.moveTo(roiX, roiY + cornerSize); ctx.lineTo(roiX, roiY); ctx.lineTo(roiX + cornerSize, roiY); ctx.stroke();
+            // Top-right
+            ctx.beginPath(); ctx.moveTo(roiX + roiW - cornerSize, roiY); ctx.lineTo(roiX + roiW, roiY); ctx.lineTo(roiX + roiW, roiY + cornerSize); ctx.stroke();
+            // Bottom-left
+            ctx.beginPath(); ctx.moveTo(roiX, roiY + roiH - cornerSize); ctx.lineTo(roiX, roiY + roiH); ctx.lineTo(roiX + cornerSize, roiY + roiH); ctx.stroke();
+            // Bottom-right
+            ctx.beginPath(); ctx.moveTo(roiX + roiW - cornerSize, roiY + roiH); ctx.lineTo(roiX + roiW, roiY + roiH); ctx.lineTo(roiX + roiW, roiY + roiH - cornerSize); ctx.stroke();
+
+            // ROI Label
+            ctx.fillStyle = '#667eea';
+            ctx.font = '14px Arial';
+            ctx.fillText('📍 วางใบหน้าในกรอบนี้', roiX + 10, roiY - 10);
+        }
+
+        requestAnimationFrame(drawROI);
+    }
+
+    function stopScanning() {
+        isScanning = false;
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+        }
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        video.classList.add('d-none');
+        roiOverlay.classList.add('d-none');
+        placeholder.classList.remove('d-none');
+        faceIndicator.classList.add('d-none');
+        motionIndicator.classList.add('d-none');
+        btnStartRealtime.classList.remove('d-none');
+        btnStopRealtime.classList.add('d-none');
+        resultSection.classList.add('d-none');
+        updateStatus('หยุดสแกน', 'secondary');
+        previousFrame = null;
+    }
+
+    function detectMotion(currentCanvas) {
+        if (!previousFrame) {
+            previousFrame = currentCanvas.getContext('2d').getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+            return false;
+        }
+
+        const ctx = currentCanvas.getContext('2d');
+        const currentData = ctx.getImageData(0, 0, currentCanvas.width, currentCanvas.height);
+        const prevData = previousFrame.data;
+        const currData = currentData.data;
+
+        let diffCount = 0;
+        const threshold = MOTION_THRESHOLD;
+
+        // Sample every 10th pixel for performance
+        for (let i = 0; i < currData.length; i += 40) {
+            const diff = Math.abs(currData[i] - prevData[i]);
+            if (diff > threshold) diffCount++;
+        }
+
+        previousFrame = currentData;
+
+        // Return true if significant motion detected
+        return diffCount > (currData.length / 40) * 0.05;
+    }
+
+    async function scanFrame() {
+        if (!isScanning) return;
+        if (isProcessing) return; // #2: skip if previous scan still in-flight
+
+        const now = Date.now();
+        if (now - lastScanTime < SCAN_COOLDOWN) return;
+
+        // Capture frame at reduced resolution for speed
+        const MAX_DIM = 640;
+        const scale = Math.min(MAX_DIM / video.videoWidth, MAX_DIM / video.videoHeight, 1);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Check motion if enabled
+        if (enableMotion.checked) {
+            const hasMotion = detectMotion(canvas);
+            if (hasMotion) {
+                motionIndicator.classList.remove('d-none');
+            } else {
+                motionIndicator.classList.add('d-none');
+                return; // Skip if no motion
+            }
+        }
+
+        // Extract ROI if enabled
+        let imageData;
+        if (enableROI.checked) {
+            // Reuse pre-created ROI canvas (#5)
+            const roiX = Math.floor(canvas.width * ROI.x);
+            const roiY = Math.floor(canvas.height * ROI.y);
+            const roiW = Math.floor(canvas.width * ROI.width);
+            const roiH = Math.floor(canvas.height * ROI.height);
+
+            roiCanvas.width = roiW;
+            roiCanvas.height = roiH;
+            roiCanvas.getContext('2d').drawImage(canvas, roiX, roiY, roiW, roiH, 0, 0, roiW, roiH);
+            imageData = roiCanvas.toDataURL('image/jpeg', 0.6);
+        } else {
+            imageData = canvas.toDataURL('image/jpeg', 0.6);
+        }
+
+        updateStatus('กำลังประมวลผล...', 'warning');
+        isProcessing = true; // #2: lock
+
+        try {
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ face_image: imageData })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.confidence >= 0.80) {
+                lastScanTime = now;
+                faceIndicator.classList.remove('d-none');
+                document.getElementById('face-confidence').textContent = (data.confidence * 100).toFixed(1) + '%';
+                currentStudent = data.student;
+                showResult(data);
+                triggerFeedback('success');
+
+                setTimeout(() => {
+                    if (data.status === 'outside') { autoCheckin(); }
+                    else { autoCheckout(); }
+                }, 500);
+            } else {
+                faceIndicator.classList.add('d-none');
+                if (data.face_detected) {
+                    triggerFeedback('fail');
+                    updateStatus('ไม่พบข้อมูลนักศึกษา', 'danger');
+                } else {
+                    updateStatus('กำลังสแกน...', 'primary');
+                }
+            }
+        } catch (err) {
+            console.error('Scan error:', err);
+            updateStatus('กำลังสแกน...', 'primary');
+        } finally {
+            isProcessing = false; // #2: always release
+        }
+    }
+
+    function showResult(data) {
+        const confidencePercent = (data.confidence * 100).toFixed(1);
+        document.getElementById('result-name').textContent = data.student.name;
+        document.getElementById('result-id').textContent = data.student.student_id;
+        document.getElementById('result-confidence').textContent = confidencePercent + '%';
+        document.getElementById('result-confidence').className =
+            data.confidence >= 0.9 ? 'badge bg-success' : 'badge bg-warning';
+
+        const statusMsg = document.getElementById('status-message');
+        const btnCheckin = document.getElementById('btn-checkin');
+        const btnCheckout = document.getElementById('btn-checkout');
+
+        if (data.status === 'inside') {
+            statusMsg.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>กำลังใช้งานห้องสมุด</span>';
+            btnCheckin.classList.add('d-none');
+            btnCheckout.classList.remove('d-none');
+        } else {
+            statusMsg.innerHTML = '<span class="text-muted"><i class="bi bi-dash-circle me-1"></i>ยังไม่ได้ Check-in</span>';
+            btnCheckin.classList.remove('d-none');
+            btnCheckout.classList.add('d-none');
+        }
+
+        resultSection.classList.remove('d-none');
+    }
+
+    async function autoCheckin() {
+        if (!currentStudent) return;
+
+        try {
+            const response = await fetch('/api/checkin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: currentStudent.student_id })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                updateStatus('✓ Check-in สำเร็จ!', 'success');
+                addLogEntry(currentStudent, 'checkin', data.log.check_in);
+                showTemporarySuccess('Check-in สำเร็จ!', `${currentStudent.name}`);
+                document.getElementById('success-sound').play();
+                triggerFeedback('success');
+            }
+        } catch (err) {
+            console.error('Checkin error:', err);
+        }
+    }
+
+    async function autoCheckout() {
+        if (!currentStudent) return;
+
+        try {
+            const response = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ student_id: currentStudent.student_id })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                updateStatus('✓ Check-out สำเร็จ!', 'danger');
+                addLogEntry(currentStudent, 'checkout', data.log.check_out);
+                showTemporarySuccess('Check-out สำเร็จ!', `${currentStudent.name} - ใช้งาน ${data.log.duration || ''}`);
+                document.getElementById('success-sound').play();
+                triggerFeedback('success');
+            }
+        } catch (err) {
+            console.error('Checkout error:', err);
+        }
+    }
+
+    document.getElementById('btn-checkin').addEventListener('click', autoCheckin);
+    document.getElementById('btn-checkout').addEventListener('click', autoCheckout);
+
+    function updateStatus(text, type) {
+        statusText.textContent = text;
+        const badge = statusDisplay.querySelector('.badge');
+        badge.className = `badge bg-${type} fs-6 px-4 py-2 border border-${type}`;
+    }
+
+    function triggerFeedback(type) {
+        cameraWrapper.classList.remove('scan-success', 'scan-fail');
+        void cameraWrapper.offsetWidth; // Trigger reflow
+        cameraWrapper.classList.add(type === 'success' ? 'scan-success' : 'scan-fail');
+        setTimeout(() => cameraWrapper.classList.remove('scan-success', 'scan-fail'), 2000);
+    }
+
+    function addLogEntry(student, type, time) {
+        const placeholder = scanLog.querySelector('div.text-center');
+        if (placeholder) placeholder.remove();
+
+        const entry = document.createElement('div');
+        entry.className = `scan-log-item ${type}`;
+        entry.innerHTML = `
+            <img src="/api/student_image/${student.student_id}" class="rounded-circle border border-white border-opacity-10" style="width: 40px; height: 40px; object-fit: cover; margin-right: 12px;" onerror="this.src='https://ui-avatars.com/api/?name=${student.name}&background=181821&color=fff'">
+            <div class="flex-grow-1">
+                <div class="fw-bold text-white fs-6">${student.name}</div>
+                <div class="d-flex align-items-center small mt-1">
+                    <span class="badge bg-${type === 'checkin' ? 'success' : 'danger'} bg-opacity-10 text-${type === 'checkin' ? 'success' : 'danger'} border border-${type === 'checkin' ? 'success' : 'danger'} border-opacity-20 px-2 py-1 rounded-pill" style="font-size: 0.65rem;">${type === 'checkin' ? 'CHECK-IN' : 'CHECK-OUT'}</span>
+                    <span class="text-secondary ms-2" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>${time}</span>
+                </div>
+            </div>
+        `;
+        scanLog.insertBefore(entry, scanLog.firstChild);
+        if (scanLog.children.length > 10) scanLog.removeChild(scanLog.lastChild);
+    }
+
+    function showTemporarySuccess(title, detail) {
+        document.getElementById('success-title').textContent = title;
+        document.getElementById('success-detail').textContent = detail;
+        successMessage.classList.remove('d-none');
+        resultSection.classList.add('d-none');
+
+        setTimeout(() => {
+            successMessage.classList.add('d-none');
+            updateStatus('กำลังสแกน...', 'primary');
+            currentStudent = null;
+        }, 2500);
+    }
+</script>
+{% endblock %}

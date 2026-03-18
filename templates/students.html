@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}จัดการนักศึกษา{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <h2 class="fw-bold mb-1">จัดการข้อมูลนักศึกษา</h2>
+            <p class="text-secondary small mb-0">ดูรายชื่อ จัดการประวัติ และแก้ไขข้อมูลสมาชิก</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <!-- Search Filter -->
+            <div class="student-search-wrapper">
+                <i class="bi bi-search"></i>
+                <input type="text" id="student-search"
+                    class="form-control bg-dark border-0 rounded-pill text-white px-3 py-2"
+                    placeholder="ค้นหานักศึกษา..." style="padding-left: 2.8rem;">
+            </div>
+            <a href="{{ url_for('register_page') }}" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-person-plus me-1"></i> เพิ่มนักศึกษา
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Students Grid -->
+<div class="row g-4" id="students-grid">
+    {% for student in students %}
+    <div class="col-md-6 col-lg-4 col-xl-3 student-card-col animate-up" data-name="{{ student.name|lower }}"
+        data-id="{{ student.student_id }}">
+        <div class="card h-100 border-0 shadow-sm hover-scale overflow-hidden"
+            style="background: var(--bg-card); border-radius: 20px;">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <div class="avatar-wrapper rounded-circle p-1"
+                            style="background: var(--accent-gradient-blue); width: 84px; height: 84px;">
+                            <img src="/api/student_image/{{ student.student_id }}" alt="{{ student.name }}"
+                                class="rounded-circle border border-4 border-dark w-100 h-100"
+                                style="object-fit: cover; background: var(--bg-sidebar);"
+                                onerror="this.src='https://ui-avatars.com/api/?name={{ student.name }}&background=181821&color=fff'">
+                        </div>
+                    </div>
+                    <h5 class="fw-bold mb-1">{{ student.name }}</h5>
+                    <div
+                        class="badge bg-secondary-subtle text-secondary px-3 py-1 rounded-pill small border border-secondary-subtle">
+                        ID: {{ student.student_id }}
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center px-2 mb-4">
+                    <div class="text-center">
+                        <div class="text-secondary small mb-1">Registered</div>
+                        <div class="fw-semibold small text-white">{{ student.created_at.strftime('%d/%m/%Y') if
+                            student.created_at
+                            else '--/--/--' }}</div>
+                    </div>
+                    <div class="vr opacity-10"></div>
+                    <div class="text-center">
+                        <div class="text-secondary small mb-1">Status</div>
+                        <div class="text-success fw-semibold small">Active</div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('history_page', student_id=student.student_id) }}"
+                        class="btn btn-outline-secondary btn-sm flex-fill rounded-pill border-opacity-25">
+                        <i class="bi bi-clock-history me-1"></i> ประวัติ
+                    </a>
+                    <button class="btn btn-danger btn-sm rounded-pill p-2" style="width: 36px;"
+                        onclick="deleteStudent('{{ student.student_id }}', '{{ student.name }}')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="empty-state">
+            <div class="empty-state-icon mx-auto">
+                <i class="bi bi-people display-4 opacity-50"></i>
+            </div>
+            <h5 class="text-secondary mb-4">ยังไม่มีนักศึกษาในระบบ</h5>
+            <a href="{{ url_for('register_page') }}" class="btn btn-primary rounded-pill px-5">
+                <i class="bi bi-person-plus me-2"></i> ลงทะเบียนครั้งแรก
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- No Results Message -->
+<div class="col-12 text-center py-5 d-none" id="no-search-results">
+    <div class="empty-state-icon mx-auto">
+        <i class="bi bi-search display-4 opacity-50"></i>
+    </div>
+    <h5 class="text-secondary mt-3 mb-0">ไม่พบนักศึกษาที่ค้นหา</h5>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content overflow-hidden"
+            style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 24px;">
+            <div class="modal-body p-5 text-center">
+                <div class="rounded-circle bg-danger bg-opacity-10 p-4 mb-4 d-inline-block">
+                    <i class="bi bi-exclamation-triangle display-4 text-danger"></i>
+                </div>
+                <h4 class="fw-bold mb-3">ยืนยันการลบข้อมูล?</h4>
+                <p class="text-secondary mb-5">คุณกำลังจะลบข้อมูลของ <strong id="delete-name"
+                        class="text-white"></strong> ข้อมูลใบหน้าและประวัติทั้งหมดจะถูกทำลายถาวร</p>
+                <div class="d-flex gap-3">
+                    <button type="button" class="btn btn-secondary flex-fill rounded-pill"
+                        data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-danger flex-fill rounded-pill"
+                        id="confirm-delete">ยืนยันการลบ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let deleteStudentId = null;
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+    function deleteStudent(studentId, name) {
+        deleteStudentId = studentId;
+        document.getElementById('delete-name').textContent = name;
+        deleteModal.show();
+    }
+
+    document.getElementById('confirm-delete').addEventListener('click', async () => {
+        if (!deleteStudentId) return;
+
+        try {
+            const response = await fetch(`/api/students/${deleteStudentId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                deleteModal.hide();
+                showToast('ลบข้อมูลนักศึกษาสำเร็จ', 'success');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                showToast(data.message, 'danger');
+            }
+        } catch (err) {
+            showToast('เกิดข้อผิดพลาด: ' + err.message, 'danger');
+        }
+    });
+
+    // ==================
+    // STUDENT SEARCH FILTER
+    // ==================
+    const searchInput = document.getElementById('student-search');
+    const studentsGrid = document.getElementById('students-grid');
+    const noResults = document.getElementById('no-search-results');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.student-card-col');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const name = card.dataset.name || '';
+                const id = card.dataset.id || '';
+                const match = name.includes(query) || id.includes(query);
+                card.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+
+            noResults.classList.toggle('d-none', visibleCount > 0);
+        });
+    }
+</script>
+{% endblock %}

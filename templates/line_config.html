@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Line Crossing Setup{% endblock %}
+
+{% block content %}
+<div class="row mb-5">
+    <div class="col-12">
+        <h2 class="fw-bold mb-1"><i class="bi bi-slash-lg me-2 text-primary"></i>Line Crossing Setup</h2>
+        <p class="text-secondary">Configure virtual lines for entry/exit detection</p>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Entry Camera -->
+    <div class="col-lg-6 animate-up">
+        <div class="card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="bi bi-door-open me-2 text-success"></i>Entry Camera</h5>
+                <span id="entry-status"
+                    class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3">Loading...</span>
+            </div>
+            <div class="position-relative rounded-4 overflow-hidden mb-3" style="background: #000;">
+                <canvas id="entry-canvas" width="640" height="480"
+                    style="width: 100%; display: block; cursor: crosshair;"></canvas>
+                <img id="entry-video" crossorigin="anonymous" style="display:none;">
+            </div>
+            <div class="d-flex justify-content-around py-3 mb-3 rounded-3" style="background: rgba(255,255,255,0.03);">
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">IN</div>
+                    <div id="entry-in" class="fs-3 fw-bold text-primary">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">OUT</div>
+                    <div id="entry-out" class="fs-3 fw-bold text-danger">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">Net</div>
+                    <div id="entry-net" class="fs-3 fw-bold text-white">0</div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="startDrawLine('entry')" class="btn btn-primary flex-fill rounded-pill">
+                    <i class="bi bi-pencil me-1"></i> Draw Line
+                </button>
+                <button onclick="resetCounters('entry')" class="btn btn-outline-secondary flex-fill rounded-pill">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exit Camera -->
+    <div class="col-lg-6 animate-up">
+        <div class="card h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="bi bi-door-closed me-2 text-danger"></i>Exit Camera</h5>
+                <span id="exit-status"
+                    class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill px-3">Loading...</span>
+            </div>
+            <div class="position-relative rounded-4 overflow-hidden mb-3" style="background: #000;">
+                <canvas id="exit-canvas" width="640" height="480"
+                    style="width: 100%; display: block; cursor: crosshair;"></canvas>
+                <img id="exit-video" crossorigin="anonymous" style="display:none;">
+            </div>
+            <div class="d-flex justify-content-around py-3 mb-3 rounded-3" style="background: rgba(255,255,255,0.03);">
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">IN</div>
+                    <div id="exit-in" class="fs-3 fw-bold text-primary">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">OUT</div>
+                    <div id="exit-out" class="fs-3 fw-bold text-danger">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-secondary small text-uppercase fw-bold mb-1">Net</div>
+                    <div id="exit-net" class="fs-3 fw-bold text-white">0</div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="startDrawLine('exit')" class="btn btn-primary flex-fill rounded-pill">
+                    <i class="bi bi-pencil me-1"></i> Draw Line
+                </button>
+                <button onclick="resetCounters('exit')" class="btn btn-outline-secondary flex-fill rounded-pill">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Events -->
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-list-ul me-2 text-primary"></i>Recent Crossing Events</h5>
+    </div>
+    <div id="events-list" style="max-height: 300px; overflow-y: auto;">
+        <p class="text-secondary small mb-0">Loading events...</p>
+    </div>
+</div>
+
+<!-- Line Draw Info Modal -->
+<div class="modal fade" id="lineDrawModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content"
+            style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 20px;">
+            <div class="modal-body p-4 text-center">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 mb-3 d-inline-block">
+                    <i class="bi bi-pencil-square display-6 text-primary"></i>
+                </div>
+                <h5 class="fw-bold mb-2">Draw Line</h5>
+                <p class="text-secondary small mb-3">Click two points on the video to draw the crossing line.</p>
+                <p class="text-secondary small mb-4">
+                    <strong>First click:</strong> Start point<br>
+                    <strong>Second click:</strong> End point
+                </p>
+                <button class="btn btn-primary rounded-pill px-4" data-bs-dismiss="modal">Got it!</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .event-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.8rem 1rem;
+        border-radius: 12px;
+        margin-bottom: 0.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.2s ease;
+    }
+
+    .event-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .event-in {
+        border-left: 3px solid #4facfe;
+    }
+
+    .event-out {
+        border-left: 3px solid #ef4444;
+    }
+
+    @media (max-width: 900px) {
+        .row.g-4>.col-lg-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let drawingCamera = null;
+    let lineStart = null;
+    let lineEnd = null;
+    const lineDrawModal = new bootstrap.Modal(document.getElementById('lineDrawModal'));
+
+    // Load video frames
+    function loadFrame(camera) {
+        const img = document.getElementById(`${camera}-video`);
+        const canvas = document.getElementById(`${camera}-canvas`);
+        const ctx = canvas.getContext('2d');
+
+        img.onload = function () {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            loadStats(camera);
+        };
+        img.src = `/video/${camera}?t=` + Date.now();
+    }
+
+    // Refresh frames periodically
+    setInterval(() => {
+        if (!drawingCamera) {
+            loadFrame('entry');
+            loadFrame('exit');
+        }
+    }, 2000);
+
+    // Load stats
+    async function loadStats(camera) {
+        try {
+            const res = await fetch(`/api/line/${camera}/stats`);
+            const data = await res.json();
+
+            const status = document.getElementById(`${camera}-status`);
+            if (data.available === false) {
+                status.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3';
+                status.textContent = 'YOLOv8 not installed';
+            } else if (data.yolo_available) {
+                status.className = data.line_configured
+                    ? 'badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3'
+                    : 'badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill px-3';
+                status.textContent = data.line_configured ? 'Ready' : 'No line set';
+            }
+
+            document.getElementById(`${camera}-in`).textContent = data.in_count || 0;
+            document.getElementById(`${camera}-out`).textContent = data.out_count || 0;
+            document.getElementById(`${camera}-net`).textContent = data.net_count || 0;
+        } catch (e) { }
+    }
+
+    // Start drawing line — show modal instead of alert
+    function startDrawLine(camera) {
+        drawingCamera = camera;
+        lineStart = null;
+        lineEnd = null;
+
+        const canvas = document.getElementById(`${camera}-canvas`);
+        canvas.style.cursor = 'crosshair';
+
+        lineDrawModal.show();
+
+        document.getElementById('lineDrawModal').addEventListener('hidden.bs.modal', () => {
+            canvas.onclick = handleCanvasClick;
+        }, { once: true });
+    }
+
+    function handleCanvasClick(e) {
+        if (!drawingCamera) return;
+
+        const canvas = e.target;
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
+        const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
+
+        if (!lineStart) {
+            lineStart = { x, y };
+            drawPoint(canvas, x, y);
+        } else {
+            lineEnd = { x, y };
+            drawLine(canvas, lineStart, lineEnd);
+            saveLine(drawingCamera, lineStart, lineEnd);
+
+            canvas.onclick = null;
+            canvas.style.cursor = 'default';
+            drawingCamera = null;
+        }
+    }
+
+    function drawPoint(canvas, x, y) {
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#22c55e';
+        ctx.fill();
+    }
+
+    function drawLine(canvas, start, end) {
+        const ctx = canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+
+    async function saveLine(camera, start, end) {
+        try {
+            const res = await fetch(`/api/line/${camera}/set`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start_x: start.x, start_y: start.y,
+                    end_x: end.x, end_y: end.y
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Line saved successfully!', 'success');
+                loadStats(camera);
+            }
+        } catch (e) {
+            showToast('Failed to save line: ' + e, 'danger');
+        }
+    }
+
+    async function resetCounters(camera) {
+        // Show a confirmation toast-like approach — use a simple confirm for now since it's destructive
+        if (!confirm('Reset IN/OUT counters for this camera?')) return;
+
+        try {
+            await fetch(`/api/line/${camera}/reset`, { method: 'POST' });
+            showToast('Counters reset successfully', 'success');
+            loadStats(camera);
+        } catch (e) { }
+    }
+
+    // Load events
+    async function loadEvents() {
+        const container = document.getElementById('events-list');
+        try {
+            const [entryRes, exitRes] = await Promise.all([
+                fetch('/api/line/entry/events?limit=10'),
+                fetch('/api/line/exit/events?limit=10')
+            ]);
+            const entryData = await entryRes.json();
+            const exitData = await exitRes.json();
+
+            const allEvents = [...(entryData.events || []), ...(exitData.events || [])]
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 15);
+
+            if (allEvents.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-secondary opacity-50"><i class="bi bi-clock-history display-6 d-block mb-2"></i><p class="small mb-0">No crossing events yet</p></div>';
+                return;
+            }
+
+            container.innerHTML = allEvents.map(e => `
+            <div class="event-item event-${e.direction.toLowerCase()}">
+                <span><strong class="text-white">${e.direction}</strong> <span class="text-secondary ms-1">Person #${e.person_id} (${e.camera_id})</span></span>
+                <span class="text-secondary small">${new Date(e.timestamp).toLocaleTimeString()}</span>
+            </div>
+        `).join('');
+        } catch (e) {
+            container.innerHTML = '<p class="text-secondary small mb-0">Failed to load events</p>';
+        }
+    }
+
+    // Initial load
+    loadFrame('entry');
+    loadFrame('exit');
+    loadEvents();
+    setInterval(loadEvents, 5000);
+</script>
+{% endblock %}
