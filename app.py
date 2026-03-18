@@ -9,8 +9,6 @@ from config import Config
 from database import db, Student, AttendanceLog
 from services.face_service import FaceService
 from services.attendance_service import AttendanceService
-from services.line_crossing import LineCrossingDetector, YOLO_AVAILABLE
-from services.zone_access import ZoneAccessController, PersonState
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -78,17 +76,6 @@ def scan_exit_page():
     """หน้าสแกนทางออก - Check-out อัตโนมัติ"""
     return render_template('scan_exit.html')
 
-
-@app.route('/line-config')
-def line_config_page():
-    """Line crossing configuration page"""
-    return render_template('line_config.html')
-
-
-@app.route('/zone-config')
-def zone_config_page():
-    """Interactive zone configuration page"""
-    return render_template('zone_config.html')
 
 
 
@@ -414,240 +401,50 @@ def api_stats():
     })
 
 
-@app.route('/api/settings/line', methods=['GET', 'POST'])
-def api_line_settings():
-    """API for getting/setting detection line ratio"""
-    if request.method == 'POST':
-        data = request.get_json()
-        ratio = float(data.get('ratio', 0.4))
-        
-        # Update both detectors (simplification for user ease)
-        entry_detector.set_line_ratio(ratio)
-        exit_detector.set_line_ratio(ratio)
-        
-        return jsonify({'success': True, 'ratio': ratio})
-    else:
-        # Return current ratio (from entry detector)
-        return jsonify({'ratio': entry_detector.line_ratio})
-
-
-# ==================== Line Crossing Detection API ====================
-
-@app.route('/api/line/<camera_id>/set', methods=['POST'])
-def api_set_crossing_line(camera_id):
-    """Set the virtual crossing line for a camera."""
-    detector = entry_line_detector if camera_id == 'entry' else exit_line_detector
-    
-    if detector is None:
-        return jsonify({'success': False, 'error': 'Line crossing not available'}), 400
-    
-    data = request.get_json()
-    start = (int(data.get('start_x', 0)), int(data.get('start_y', 0)))
-    end = (int(data.get('end_x', 640)), int(data.get('end_y', 480)))
-    
-    detector.set_line(start, end)
-    
-    return jsonify({
-        'success': True,
-        'camera_id': camera_id,
-        'line': {'start': start, 'end': end}
-    })
-
-
-@app.route('/api/line/<camera_id>/stats', methods=['GET'])
-def api_line_stats(camera_id):
-    """Get line crossing statistics for a camera."""
-    detector = entry_line_detector if camera_id == 'entry' else exit_line_detector
-    
-    if detector is None:
-        return jsonify({
-            'available': False,
-            'yolo_installed': YOLO_AVAILABLE,
-            'message': 'Install ultralytics: pip install ultralytics'
-        })
-    
-    return jsonify(detector.get_stats())
-
-
-@app.route('/api/line/<camera_id>/events', methods=['GET'])
-def api_line_events(camera_id):
-    """Get recent crossing events for a camera."""
-    detector = entry_line_detector if camera_id == 'entry' else exit_line_detector
-    
-    if detector is None:
-        return jsonify({'events': []})
-    
-    limit = request.args.get('limit', 20, type=int)
-    return jsonify({
-        'camera_id': camera_id,
-        'events': detector.get_recent_events(limit)
-    })
-
-
-@app.route('/api/line/<camera_id>/reset', methods=['POST'])
-def api_reset_line_counters(camera_id):
-    """Reset IN/OUT counters for a camera."""
-    detector = entry_line_detector if camera_id == 'entry' else exit_line_detector
-    
-    if detector is None:
-        return jsonify({'success': False, 'error': 'Line crossing not available'}), 400
-    
-    detector.reset_counters()
-    return jsonify({'success': True, 'camera_id': camera_id})
-
-
-# ==================== Zone Access Control API ====================
-
-@app.route('/api/zone/<camera_id>/areas', methods=['GET', 'POST'])
-def api_zone_areas(camera_id):
-    """Get or set zone rectangular areas."""
-    controller = entry_zone_controller if camera_id == 'entry' else exit_zone_controller
-    
-    if request.method == 'POST':
-        data = request.get_json()
-        zones_data = data.get('zones', {})
-        # Convert string keys back to int
-        processed_stats = {int(k): v for k, v in zones_data.items() if v is not None}
-        controller.set_areas(processed_stats)
-        return jsonify({
-            'success': True,
-            'zones': controller.zone_areas
-        })
-    else:
-        return jsonify({
-            'zones': controller.zone_areas
-        })
-
-
-@app.route('/api/zone/<camera_id>/stats', methods=['GET'])
-def api_zone_stats(camera_id):
-    """Get zone controller statistics."""
-    controller = entry_zone_controller if camera_id == 'entry' else exit_zone_controller
-    return jsonify(controller.get_stats())
-
 
 # ==================== Camera Streaming with Face Detection ====================
 
 class FaceDetectionOverlay:
-    """Robust face detection using OpenCV YuNet (Deep Learning)"""
-    
+    """Face detection overlay for camera streams using YuNet"""
+
     def __init__(self):
-        # Load YuNet model (Deep Learning based, high accuracy)
         model_path = 'face_detection_yunet_2023mar.onnx'
-        if not os.path.exists(model_path):
-            print("Warning: YuNet model not found, downloading...")
-            # Fallback or strict error handling could go here
-        
         self.detector = cv2.FaceDetectorYN.create(
             model=model_path,
             config="",
-            input_size=(320, 320), # Initial size, updated per frame
-            score_threshold=0.6,   # High confidence to avoid walls/curtains
+            input_size=(320, 320),
+            score_threshold=0.6,
             nms_threshold=0.3,
             top_k=5000,
             backend_id=cv2.dnn.DNN_BACKEND_OPENCV,
             target_id=cv2.dnn.DNN_TARGET_CPU
         )
         self.last_faces = []
-        
-        # Load line position from config
-        self.config_file = 'line_config.json'
-        self.line_ratio = self.load_line_ratio()
 
-    def load_line_ratio(self):
-        """Load line ratio from config file"""
-        import json
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    config = json.load(f)
-                    return config.get('line_ratio', 0.4)
-        except Exception as e:
-            print(f"Error loading line config: {e}")
-        return 0.4
-
-    def set_line_ratio(self, ratio):
-        """Update line ratio and save to config"""
-        import json
-        self.line_ratio = max(0.1, min(0.9, ratio)) # Clamp between 10% and 90%
-        try:
-            with open(self.config_file, 'w') as f:
-                json.dump({'line_ratio': self.line_ratio}, f)
-        except Exception as e:
-            print(f"Error saving line config: {e}")
-    
     def detect_faces(self, frame):
         """Detect faces using YuNet"""
         height, width, _ = frame.shape
-        
-        # YuNet requires updating input size if frame size changes
         self.detector.setInputSize((width, height))
-        
-        # Detect
-        # results = (1, faces_array) where faces_array is [x, y, w, h,...]
         _, faces_data = self.detector.detect(frame)
-        
         faces = []
         if faces_data is not None:
             for face in faces_data:
-                # YuNet returns bounding box as first 4 elements: x, y, w, h
-                # Also returns confidence at index 14
                 confidence = face[14]
                 if confidence >= 0.6:
                     x, y, w, h = map(int, face[:4])
                     faces.append((x, y, w, h))
-        
         self.last_faces = faces
         return faces
-    def draw_overlay(self, frame, is_entry=True, zone_controller=None):
-        """Draw face detection boxes and zone areas on frame"""
-        height, width = frame.shape[:2]
-        
-        # Detect faces
+
+    def draw_overlay(self, frame):
+        """Draw face detection boxes on frame"""
         faces = self.detect_faces(frame)
-        
-        # Draw bounding boxes around faces
         for (x, y, w, h) in faces:
-            # Green box for detected face
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 3)
-            
-            # Face label
-            cv2.putText(frame, "FACE DETECTED", (x, y-10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        
-        # Draw Zone Areas
-        if zone_controller:
-            colors = {
-                1: (128, 128, 128), # Gray - Detection
-                2: (255, 255, 0),   # Cyan - Intent
-                3: (0, 255, 255)    # Yellow - Auth
-            }
-            names = {1: "DETECTION", 2: "INTENT", 3: "AUTH"}
-            
-            for zone_id, points in zone_controller.zone_areas.items():
-                if points and isinstance(points, list) and len(points) >= 2:
-                    # points is list of [x, y] normalized
-                    # Convert to pixel coordinates
-                    pts = np.array([
-                        [int(p[0] * width), int(p[1] * height)] 
-                        for p in points
-                    ], np.int32)
-                    pts = pts.reshape((-1, 1, 2))
-                    
-                    color = colors.get(zone_id, (255, 255, 255))
-                    # Draw polygon
-                    cv2.polylines(frame, [pts], True, color, 2)
-                    
-                    # Label at the first point
-                    lx, ly = pts[0][0]
-                    cv2.putText(frame, f"ZONE {zone_id}: {names.get(zone_id)}", (lx + 5, ly + 20),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        
-        # Status text
-        status_text = f"Faces: {len(faces)}"
-        cv2.putText(frame, status_text, (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-        
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            cv2.putText(frame, "FACE", (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, f"Faces: {len(faces)}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         return frame
 
 
@@ -655,19 +452,6 @@ class FaceDetectionOverlay:
 entry_detector = FaceDetectionOverlay()
 exit_detector = FaceDetectionOverlay()
 
-# Line crossing detectors for each camera
-entry_line_detector = None
-exit_line_detector = None
-if YOLO_AVAILABLE:
-    try:
-        entry_line_detector = LineCrossingDetector("entry", model_path="yolov8n.pt")
-        exit_line_detector = LineCrossingDetector("exit", model_path="yolov8n.pt")
-    except Exception as e:
-        print(f"Line crossing detector initialization failed: {e}")
-
-# Zone-based access controllers for each camera
-entry_zone_controller = ZoneAccessController("entry")
-exit_zone_controller = ZoneAccessController("exit")
 
 
 class CameraStream:
@@ -735,87 +519,49 @@ entry_camera = CameraStream(Config.ENTRY_CAMERA_URL)
 exit_camera = CameraStream(Config.EXIT_CAMERA_URL)
 
 
-def generate_frames_with_detection(camera, detector, zone_controller, is_entry=True):
-    """Generate MJPEG frames with face detection and zone overlay"""
+def generate_frames_with_detection(camera, detector, is_entry=True):
+    """Generate MJPEG frames with face detection overlay"""
     camera.start()
-    # Wait for camera to start and get first frame
-    for _ in range(50):  # Wait up to 5 seconds
+    for _ in range(50):
         if camera.get_frame() is not None:
             break
         time.sleep(0.1)
-    
+
     frame_count = 0
     MAX_WIDTH = 800
-    
+
     while True:
         frame = camera.get_frame()
         if frame is not None:
-            # Resize if too big (reduces bandwidth usage significantly)
             h, w = frame.shape[:2]
             if w > MAX_WIDTH:
                 scale = MAX_WIDTH / w
                 frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
-            
-            # Only run detection every 3 frames for better performance
+
             if frame_count % 3 == 0:
-                # Update zone controller with detections
-                h, w = frame.shape[:2]
-                faces = detector.detect_faces(frame)
-                
-                # Use faces as person detections (for now, until YOLO is fully integrated here)
-                # BBoxes are (x, y, w, h) -> convert to (x1, y1, x2, y2)
-                bboxes = [(x, y, x+w, y+h) for (x, y, w, h) in faces]
-                
-                # Update zone state machine
-                auth_needed = zone_controller.update(bboxes, w, h, frame)
-                
-                # Handle Auth Trigger (Zone 3)
-                for person in auth_needed:
-                    if not person.auth_completed and person.state == PersonState.AUTH:
-                        # Try to recognize face from buffered frames
-                        if person.face_frames:
-                            # Use last frame for recognition
-                            top_frame = person.face_frames[-1]
-                            found, student_id, confidence = face_service.recognize_face_image(top_frame)
-                            if found and confidence >= 0.75:
-                                # Successful recognition -> Trigger Check-in/out
-                                zone_controller.complete_auth(person, student_id, confidence)
-                                
-                                # Call AttendanceService
-                                with app.app_context():
-                                    if is_entry:
-                                        AttendanceService.check_in(student_id)
-                                    else:
-                                        AttendanceService.check_out(student_id)
-                
-                # Draw overlay
-                frame = detector.draw_overlay(frame, is_entry, zone_controller)
-            else:
-                # Draw cached overlays for performance
-                # Draw zones
-                frame = detector.draw_overlay(frame, is_entry, zone_controller)
-            
+                frame = detector.draw_overlay(frame)
+
             frame_count += 1
-            # Reduce JPEG quality to 70 for performance
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
             if ret:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-        
-        time.sleep(0.05)  # ~20 FPS (Stable)
+
+        time.sleep(0.05)  # ~20 FPS
+
 
 
 @app.route('/video/entry')
 def video_entry():
     """Stream entry camera feed with face detection overlay"""
-    return Response(generate_frames_with_detection(entry_camera, entry_detector, entry_zone_controller, is_entry=True),
+    return Response(generate_frames_with_detection(entry_camera, entry_detector, is_entry=True),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.route('/video/exit')
 def video_exit():
     """Stream exit camera feed with face detection overlay"""
-    return Response(generate_frames_with_detection(exit_camera, exit_detector, exit_zone_controller, is_entry=False),
+    return Response(generate_frames_with_detection(exit_camera, exit_detector, is_entry=False),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 

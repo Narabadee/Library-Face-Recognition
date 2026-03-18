@@ -24,7 +24,11 @@
             <!-- Scan Line Animation -->
             <div class="scan-line"></div>
 
+            <!-- RTSP stream (img) -->
             <img id="camera-feed" class="camera-feed d-none" alt="Camera Feed">
+            <!-- Webcam stream (video) -->
+            <video id="webcam-feed" class="camera-feed d-none" autoplay playsinline muted></video>
+
             <canvas id="canvas" class="d-none"></canvas>
             <canvas id="roi-overlay" class="roi-overlay d-none"></canvas>
 
@@ -33,7 +37,7 @@
                     <div class="rounded-circle bg-danger bg-opacity-10 p-4 mb-3 d-inline-block">
                         <i class="bi bi-camera-video display-4 text-danger"></i>
                     </div>
-                    <p class="text-secondary">กดปุ่มด้านล่างเพื่อเชื่อมต่อกล้อง RTSP ทางออก</p>
+                    <p class="text-secondary" id="placeholder-text">เลือกแหล่งกล้องแล้วกดปุ่มเริ่ม</p>
                 </div>
             </div>
 
@@ -46,7 +50,7 @@
 
         <!-- Controls -->
         <div class="card bg-card border-0 mb-4 p-4">
-            <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div id="status-display">
                     <div
                         class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill border border-secondary-subtle">
@@ -54,6 +58,22 @@
                         <span id="status-text">พร้อมใช้งาน</span>
                     </div>
                 </div>
+
+                <!-- Camera Source Toggle -->
+                <div class="d-flex align-items-center gap-2" id="source-selector">
+                    <span class="text-secondary small fw-semibold">แหล่งกล้อง:</span>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Camera source">
+                        <input type="radio" class="btn-check" name="cam-source" id="src-rtsp" value="rtsp" checked>
+                        <label class="btn btn-outline-secondary rounded-start-pill" for="src-rtsp">
+                            <i class="bi bi-hdd-network me-1"></i>RTSP
+                        </label>
+                        <input type="radio" class="btn-check" name="cam-source" id="src-webcam" value="webcam">
+                        <label class="btn btn-outline-danger rounded-end-pill" for="src-webcam">
+                            <i class="bi bi-webcam me-1"></i>Webcam
+                        </label>
+                    </div>
+                </div>
+
                 <div id="camera-controls">
                     <button id="btn-start" class="btn btn-primary rounded-pill px-4">
                         <i class="bi bi-play-fill me-1"></i> เริ่มสแกนทางออก
@@ -69,17 +89,17 @@
     <!-- Side Panel -->
     <div class="col-lg-4">
         <!-- Camera Info Card -->
-        <div class="card mb-4 border-0 shadow-sm"
+        <div class="card mb-4 border-0 shadow-sm" id="camera-info-card"
             style="background: linear-gradient(135deg, #ee0979 0%, #ff6a00 200%);">
             <div class="card-body p-4 text-white">
-                <h6 class="fw-bold opacity-75 mb-3 text-uppercase small">RTSP Status</h6>
+                <h6 class="fw-bold opacity-75 mb-3 text-uppercase small" id="camera-info-title">RTSP Status</h6>
                 <div class="d-flex align-items-center gap-3">
                     <div class="rounded-3 bg-white bg-opacity-20 p-3">
-                        <i class="bi bi-hdd-network display-6"></i>
+                        <i class="bi bi-hdd-network display-6" id="camera-info-icon"></i>
                     </div>
                     <div>
-                        <div class="fw-bold fs-5">Exit Camera</div>
-                        <div class="opacity-75 small">IP: 192.168.1.179</div>
+                        <div class="fw-bold fs-5" id="camera-info-name">Exit Camera</div>
+                        <div class="opacity-75 small" id="camera-info-detail">IP: 192.168.1.179</div>
                     </div>
                 </div>
             </div>
@@ -225,12 +245,20 @@
             opacity: 1;
         }
     }
+
+    video.camera-feed {
+        width: 100%;
+        height: auto;
+        border-radius: 18px;
+        display: block;
+    }
 </style>
 {% endblock %}
 
 {% block scripts %}
 <script>
     const cameraFeed = document.getElementById('camera-feed');
+    const webcamFeed = document.getElementById('webcam-feed');
     const canvas = document.getElementById('canvas');
     const roiOverlay = document.getElementById('roi-overlay');
     const placeholder = document.getElementById('camera-placeholder');
@@ -244,6 +272,10 @@
     const enableMotion = document.getElementById('enable-motion');
     const successMessage = document.getElementById('success-message');
     const cameraWrapper = document.querySelector('.camera-wrapper');
+    const cameraInfoTitle = document.getElementById('camera-info-title');
+    const cameraInfoIcon = document.getElementById('camera-info-icon');
+    const cameraInfoName = document.getElementById('camera-info-name');
+    const cameraInfoDetail = document.getElementById('camera-info-detail');
 
     let isScanning = false;
     let scanInterval = null;
@@ -251,16 +283,70 @@
     const SCAN_COOLDOWN = 4000;
     const ROI = { x: 0.15, y: 0.1, width: 0.7, height: 0.8 };
 
-    btnStart.addEventListener('click', () => {
-        cameraFeed.src = '/video/exit';
-        cameraFeed.classList.remove('d-none');
-        placeholder.classList.add('d-none');
-        cameraFeed.onload = () => {
-            roiOverlay.width = cameraFeed.naturalWidth || 1280;
-            roiOverlay.height = cameraFeed.naturalHeight || 720;
-            roiOverlay.classList.remove('d-none');
-            requestAnimationFrame(drawROI);
-        };
+    // --- Camera Source Selector ---
+    const sourceInputs = document.querySelectorAll('input[name="cam-source"]');
+    let webcamStream = null;
+
+    function getSelectedSource() {
+        for (const input of sourceInputs) {
+            if (input.checked) return input.value;
+        }
+        return 'rtsp';
+    }
+
+    // Update info card when source changes
+    sourceInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            const src = getSelectedSource();
+            if (src === 'webcam') {
+                cameraInfoTitle.textContent = 'Webcam Status';
+                cameraInfoIcon.className = 'bi bi-webcam display-6';
+                cameraInfoName.textContent = 'Local Webcam';
+                cameraInfoDetail.textContent = 'กล้องจากเครื่องนี้';
+            } else {
+                cameraInfoTitle.textContent = 'RTSP Status';
+                cameraInfoIcon.className = 'bi bi-hdd-network display-6';
+                cameraInfoName.textContent = 'Exit Camera';
+                cameraInfoDetail.textContent = 'IP: 192.168.1.179';
+            }
+        });
+    });
+
+    // --- Start / Stop ---
+    btnStart.addEventListener('click', async () => {
+        const source = getSelectedSource();
+        sourceInputs.forEach(i => i.disabled = true);
+
+        if (source === 'webcam') {
+            try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                webcamFeed.srcObject = webcamStream;
+                webcamFeed.classList.remove('d-none');
+                placeholder.classList.add('d-none');
+
+                webcamFeed.onloadedmetadata = () => {
+                    roiOverlay.width = webcamFeed.videoWidth || 640;
+                    roiOverlay.height = webcamFeed.videoHeight || 480;
+                    roiOverlay.classList.remove('d-none');
+                    requestAnimationFrame(drawROI);
+                };
+            } catch (err) {
+                alert('ไม่สามารถเข้าถึง Webcam ได้: ' + err.message);
+                sourceInputs.forEach(i => i.disabled = false);
+                return;
+            }
+        } else {
+            cameraFeed.src = '/video/exit';
+            cameraFeed.classList.remove('d-none');
+            placeholder.classList.add('d-none');
+            cameraFeed.onload = () => {
+                roiOverlay.width = cameraFeed.naturalWidth || 1280;
+                roiOverlay.height = cameraFeed.naturalHeight || 720;
+                roiOverlay.classList.remove('d-none');
+                requestAnimationFrame(drawROI);
+            };
+        }
+
         btnStart.classList.add('d-none');
         btnStop.classList.remove('d-none');
         isScanning = true;
@@ -273,13 +359,23 @@
     function stopScanning() {
         isScanning = false;
         if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+
         cameraFeed.src = '';
         cameraFeed.classList.add('d-none');
+
+        if (webcamStream) {
+            webcamStream.getTracks().forEach(t => t.stop());
+            webcamStream = null;
+        }
+        webcamFeed.srcObject = null;
+        webcamFeed.classList.add('d-none');
+
         roiOverlay.classList.add('d-none');
         placeholder.classList.remove('d-none');
         faceIndicator.classList.add('d-none');
         btnStart.classList.remove('d-none');
         btnStop.classList.add('d-none');
+        sourceInputs.forEach(i => i.disabled = false);
         updateStatus('หยุดสแกน', 'secondary');
     }
 
@@ -301,6 +397,24 @@
         requestAnimationFrame(drawROI);
     }
 
+    /** Capture a frame from whichever source is active */
+    async function captureFrame() {
+        const source = getSelectedSource();
+
+        if (source === 'webcam') {
+            canvas.width = webcamFeed.videoWidth || 640;
+            canvas.height = webcamFeed.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(webcamFeed, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.9);
+        } else {
+            const captureResponse = await fetch('/api/capture/exit', { method: 'POST' });
+            const captureData = await captureResponse.json();
+            if (!captureData.success) return null;
+            return captureData.image;
+        }
+    }
+
     async function scanFrame() {
         if (!isScanning) return;
         const now = Date.now();
@@ -309,11 +423,9 @@
         updateStatus('กำลังประมวลผล...', 'warning');
 
         try {
-            const captureResponse = await fetch('/api/capture/exit', { method: 'POST' });
-            const captureData = await captureResponse.json();
-            if (!captureData.success) { updateStatus('กำลังสแกน...', 'danger'); return; }
+            let imageData = await captureFrame();
+            if (!imageData) { updateStatus('กำลังสแกน...', 'danger'); return; }
 
-            let imageData = captureData.image;
             if (enableROI.checked) {
                 const img = new Image();
                 img.src = imageData;
@@ -379,7 +491,7 @@
 
     function triggerFeedback(type) {
         cameraWrapper.classList.remove('scan-success', 'scan-fail');
-        void cameraWrapper.offsetWidth; // Trigger reflow
+        void cameraWrapper.offsetWidth;
         cameraWrapper.classList.add(type === 'success' ? 'scan-success' : 'scan-fail');
         setTimeout(() => cameraWrapper.classList.remove('scan-success', 'scan-fail'), 2000);
     }

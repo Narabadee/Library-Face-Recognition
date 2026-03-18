@@ -8,8 +8,7 @@ def check_dependencies():
         'cv2', 
         'numpy', 
         'PIL', 
-        'onnxruntime', 
-        'ultralytics'
+        'onnxruntime'
     ]
     
     print("📋 Checking Project Dependencies...")
@@ -40,8 +39,7 @@ def check_models():
     
     required_files = [
         'face_detection_yunet_2023mar.onnx',
-        'models/w600k_r50.onnx',
-        'yolov8n.pt'
+        'models/w600k_r50.onnx'
     ]
     
     all_ok = True
