@@ -194,6 +194,19 @@ echo   [OK] All dependencies installed successfully!
 echo ==================================================
 echo.
 
+:: ---- Step 4.5: Download AI models (first time only) ----
+echo [STEP *] Checking AI models (first-time may download ~275MB)...
+python -c "from services.model_manager import ensure_models; ok = ensure_models(); exit(0 if ok else 1)"
+if !errorlevel! neq 0 (
+    echo.
+    echo [ERROR] Failed to download AI models!
+    echo    Please check your internet connection and try again.
+    echo.
+    goto :FAIL
+)
+echo [OK] AI models ready.
+echo.
+
 :: ---- Step 5: System check ----
 echo Running quick system check...
 python check_env.py
