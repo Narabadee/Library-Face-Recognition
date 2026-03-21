@@ -14,7 +14,13 @@ echo 2. Python Cache Folders (__pycache__)
 echo 3. Redundant AI Models
 echo.
 set /p confirm="Are you sure you want to clean the project? (y/n): "
-if /i "%confirm%" neq "y" exit /b
+if /i "%confirm%" neq "y" (
+    echo.
+    echo Cleanup cancelled. No files were deleted.
+    echo.
+    pause
+    exit /b
+)
 
 echo.
 echo [1/3] 🗑️ Deleting .venv (This might take a few seconds)...

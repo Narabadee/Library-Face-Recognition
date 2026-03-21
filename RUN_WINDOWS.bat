@@ -69,11 +69,18 @@ if !errorlevel! neq 0 (
 echo Installing Python 3.12... Please wait, this might take a minute.
 start /wait python_installer.exe /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
 if exist python_installer.exe del /f /q python_installer.exe
-echo [OK] Python 3.12 installed successfully!
-echo [INFO] Restarting script to apply changes...
+echo.
+echo ==================================================
+echo   [OK] Python 3.12 installed successfully!
+echo ==================================================
+echo.
+echo   IMPORTANT: You must now CLOSE this window completely,
+echo   then DOUBLE-CLICK RUN_WINDOWS.bat again to start.
+echo.
+echo   (Windows needs a fresh terminal to see the new Python.)
+echo   Do NOT click restart inside this window - it will not work.
 echo.
 pause
-start "" "%~f0"
 exit /b
 
 :PYTHON_OK
@@ -211,6 +218,9 @@ echo ==================================================
 echo   Setup did NOT complete successfully.
 echo   Review the errors above for details.
 echo ==================================================
+echo.
+echo Press any key to close this window...
+pause >nul
 
 :END
 echo.
