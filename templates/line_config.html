@@ -98,26 +98,7 @@
     </div>
 </div>
 
-<!-- Line Draw Info Modal -->
-<div class="modal fade" id="lineDrawModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content"
-            style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 20px;">
-            <div class="modal-body p-4 text-center">
-                <div class="rounded-circle bg-primary bg-opacity-10 p-3 mb-3 d-inline-block">
-                    <i class="bi bi-pencil-square display-6 text-primary"></i>
-                </div>
-                <h5 class="fw-bold mb-2">Draw Line</h5>
-                <p class="text-secondary small mb-3">Click two points on the video to draw the crossing line.</p>
-                <p class="text-secondary small mb-4">
-                    <strong>First click:</strong> Start point<br>
-                    <strong>Second click:</strong> End point
-                </p>
-                <button class="btn btn-primary rounded-pill px-4" data-bs-dismiss="modal">Got it!</button>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <style>
     .event-item {
@@ -151,6 +132,29 @@
         }
     }
 </style>
+{% endblock %}
+
+{% block modals %}
+<!-- Line Draw Info Modal -->
+<div class="modal fade" id="lineDrawModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content"
+            style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 20px;">
+            <div class="modal-body p-4 text-center">
+                <div class="rounded-circle bg-primary bg-opacity-10 p-3 mb-3 d-inline-block">
+                    <i class="bi bi-pencil-square display-6 text-primary"></i>
+                </div>
+                <h5 class="fw-bold mb-2">Draw Line</h5>
+                <p class="text-secondary small mb-3">Click two points on the video to draw the crossing line.</p>
+                <p class="text-secondary small mb-4">
+                    <strong>First click:</strong> Start point<br>
+                    <strong>Second click:</strong> End point
+                </p>
+                <button class="btn btn-primary rounded-pill px-4" data-bs-dismiss="modal">Got it!</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

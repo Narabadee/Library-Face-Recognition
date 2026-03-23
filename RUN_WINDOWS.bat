@@ -1,4 +1,6 @@
 @echo off
+chcp 65001 > nul
+set PYTHONUTF8=1
 setlocal enabledelayedexpansion
 
 :: IMPORTANT: Change to the directory where this script lives
@@ -182,7 +184,7 @@ if !errorlevel! neq 0 (
         echo   Your internet or firewall may be blocking package downloads.
     )
     echo.
-    echo   Full log saved to: %cd%\install_log.txt
+    echo   Full log saved to: "%cd%\install_log.txt"
     echo.
     goto :FAIL
 )
