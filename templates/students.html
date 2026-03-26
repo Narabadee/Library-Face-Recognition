@@ -104,6 +104,31 @@
 {% endblock %}
 
 {% block modals %}
+<!-- Reset Database Confirmation Modal -->
+<div class="modal fade" id="resetModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content overflow-hidden"
+            style="background: var(--bg-sidebar); border: 1px solid #ef4444; border-radius: 24px;">
+            <div class="modal-body p-5 text-center">
+                <div class="rounded-circle bg-danger bg-opacity-10 p-4 mb-4 d-inline-block">
+                    <i class="bi bi-trash-fill display-4 text-danger"></i>
+                </div>
+                <h4 class="fw-bold mb-3 text-white">ล้างฐานข้อมูลทั้งหมด?</h4>
+                <div class="alert alert-danger border-0 rounded-4 text-start mb-5" style="background: rgba(239, 68, 68, 0.1);">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>คำเตือน:</strong> การดำเนินการนี้ไม่สามารถย้อนกลับได้ ข้อมูลนักศึกษา ประวัติการเข้า-ออก และข้อมูลใบหน้าทั้งหมดจะถูกลบแบบถาวร
+                </div>
+                <div class="d-flex gap-3">
+                    <button type="button" class="btn btn-secondary flex-fill rounded-pill"
+                        data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-danger flex-fill rounded-pill py-2 fw-bold"
+                        id="confirm-reset">ยืนยันการล้างข้อมูลทั้งหมด</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -126,12 +151,32 @@
         </div>
     </div>
 </div>
+
+<!-- Danger Zone -->
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card bg-transparent border-0 mt-5 pt-5 border-top border-secondary border-opacity-10">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h5 class="fw-bold text-danger mb-1"><i class="bi bi-shield-lock-fill me-2"></i>Danger Zone</h5>
+                    <p class="text-secondary small mb-0">การดำเนินการด้านล่างนี้มีผลกระทบต่อระบบอย่างรุนแรง โปรดใช้ด้วยความระมัดระวัง</p>
+                </div>
+                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                    <button class="btn btn-outline-danger rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#resetModal">
+                        <i class="bi bi-trash3 me-1"></i> ล้างฐานข้อมูลทั้งหมด
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
     let deleteStudentId = null;
     const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const resetModal = new bootstrap.Modal(document.getElementById('resetModal'));
 
     function deleteStudent(studentId, name) {
         deleteStudentId = studentId;
@@ -139,6 +184,7 @@
         deleteModal.show();
     }
 
+    // Individual Student Deletion
     document.getElementById('confirm-delete').addEventListener('click', async () => {
         if (!deleteStudentId) return;
 
@@ -158,6 +204,36 @@
             }
         } catch (err) {
             showToast('เกิดข้อผิดพลาด: ' + err.message, 'danger');
+        }
+    });
+
+    // Full Database Reset
+    document.getElementById('confirm-reset').addEventListener('click', async () => {
+        const btn = document.getElementById('confirm-reset');
+        const originalText = btn.innerHTML;
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังประมวลผล...';
+            
+            const response = await fetch('/api/danger/reset-database', {
+                method: 'POST'
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                resetModal.hide();
+                showToast('ล้างฐานข้อมูลแและรีเซ็ตระบบ AI สำเร็จ', 'success');
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showToast(data.message, 'danger');
+            }
+        } catch (err) {
+            showToast('เกิดข้อผิดพลาด: ' + err.message, 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     });
 

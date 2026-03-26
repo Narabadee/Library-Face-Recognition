@@ -20,6 +20,7 @@ from io import BytesIO
 from PIL import Image
 from typing import Optional, Tuple, List
 import cv2
+import shutil
 
 from .face_config import DEFAULT_CONFIG, FaceRecognitionConfig
 from .face_recognition_engine import (
@@ -570,3 +571,42 @@ class FaceService:
         Returns the embeddings dictionary.
         """
         return self.database.embeddings
+
+    def reset_all(self):
+        """
+        Wipe all face data from disk and memory.
+        VERY DANGEROUS - use only for full system reset.
+        """
+        logger.warning("RESETTING ALL FACE DATA...")
+        
+        # 1. Clear in-memory state
+        self.database.clear()
+        self.known_faces = {}
+        
+        # 2. Clear disk: Reference images
+        for f in os.listdir(self.faces_folder):
+            if f.endswith(('.jpg', '.jpeg', '.png')):
+                try:
+                    os.remove(os.path.join(self.faces_folder, f))
+                except Exception as e:
+                    logger.error(f"Failed to delete {f}: {e}")
+        
+        # 3. Clear disk: Embeddings
+        for f in os.listdir(self.embeddings_folder):
+            if f.endswith('.npy'):
+                try:
+                    os.remove(os.path.join(self.embeddings_folder, f))
+                except Exception as e:
+                    logger.error(f"Failed to delete embedding {f}: {e}")
+                    
+        # 4. Clear disk: Enrollment folders
+        if os.path.exists(self.enrollment_folder):
+            for item in os.listdir(self.enrollment_folder):
+                item_path = os.path.join(self.enrollment_folder, item)
+                if os.path.isdir(item_path):
+                    try:
+                        shutil.rmtree(item_path)
+                    except Exception as e:
+                        logger.error(f"Failed to delete enrollment folder {item}: {e}")
+        
+        logger.info("FaceService: All face data wiped successfully")

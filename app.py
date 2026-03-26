@@ -366,7 +366,7 @@ def serve_student_image(student_id):
 
 @app.route('/api/students/<student_id>', methods=['DELETE'])
 def api_delete_student(student_id):
-    """API ลบนักศึกษา"""
+    """API ลบนนักศึกษา"""
     try:
         student = Student.query.filter_by(student_id=student_id).first()
         if not student:
@@ -374,6 +374,11 @@ def api_delete_student(student_id):
         
         # Delete face data
         face_service.delete_face(student_id)
+        
+        # #6 perf: clear server-side scan cache
+        with _scan_cache_lock:
+            if student_id in _scan_cache:
+                del _scan_cache[student_id]
         
         # Delete attendance logs
         AttendanceLog.query.filter_by(student_id=student.id).delete()
@@ -399,6 +404,31 @@ def api_stats():
         'today_checkins': AttendanceLog.query.filter_by(date=today).count(),
         'currently_inside': AttendanceLog.query.filter_by(date=today, check_out=None).count()
     })
+
+
+@app.route('/api/danger/reset-database', methods=['POST'])
+def api_reset_database():
+    """API ล้างฐานข้อมูลทั้งหมด (อันตราย!)"""
+    try:
+        # 1. Delete all database records (using TRUNCATE or bulk delete)
+        # We'll use bulk delete for compatibility
+        AttendanceLog.query.delete()
+        Student.query.delete()
+        db.session.commit()
+        
+        # 2. Reset face service (clears images and encodings)
+        face_service.reset_all()
+        
+        # 3. Clear server-side scan cache
+        with _scan_cache_lock:
+            _scan_cache.clear()
+            
+        logger.info("SYSTEM RESET: All data wiped successfully")
+        return jsonify({'success': True, 'message': 'ล้างข้อมูลสำเร็จและรีเซ็ตระบบ AI เรียบร้อยแล้ว'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Reset error: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 

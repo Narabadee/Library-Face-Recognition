@@ -524,6 +524,12 @@ class EmbeddingDatabase:
                 os.remove(path)
             return True
         return False
+
+    def clear(self):
+        """Clear all in-memory embeddings and metadata."""
+        self.embeddings = {}
+        self.metadata = {}
+        logger.info("In-memory embedding database cleared")
     
     def get_all(self) -> Dict[str, np.ndarray]:
         return self.embeddings  # #4 perf: return direct ref, no copy needed during recognition
