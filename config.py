@@ -5,7 +5,7 @@ class Config:
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     
     # Database
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(BASE_DIR, 'data', 'library.db')
+    SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:1234@localhost:5432/library_db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Face data storage
