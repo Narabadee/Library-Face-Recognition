@@ -209,6 +209,58 @@ if !errorlevel! neq 0 (
 echo [OK] AI models ready.
 echo.
 
+:: ---- Step 4.6: Check PostgreSQL and Database ----
+echo [STEP *] Checking PostgreSQL installation...
+set "PSQL_CMD="
+where psql >nul 2>&1
+if !errorlevel! equ 0 (
+    set "PSQL_CMD=psql"
+    goto :FOUND_PSQL
+)
+
+for /d %%i in ("%ProgramFiles%\PostgreSQL\*") do (
+    if exist "%%i\bin\psql.exe" (
+        set "PSQL_CMD=%%i\bin\psql.exe"
+        goto :FOUND_PSQL
+    )
+)
+
+echo.
+echo ==================================================
+echo   [ERROR] PostgreSQL is not installed or not found.
+echo   Please install PostgreSQL ^(version 12 or higher recommended^).
+echo   IMPORTANT: During installation, set the password for 'postgres' to: 1234
+echo.
+echo   Download here: https://www.postgresql.org/download/windows/
+echo ==================================================
+echo.
+goto :FAIL
+
+:FOUND_PSQL
+echo [OK] PostgreSQL found.
+echo [STEP *] Checking database 'library_db'...
+set PGPASSWORD=1234
+"!PSQL_CMD!" -U postgres -p 5432 -h localhost -lq 2>nul | findstr /i "library_db" >nul
+if !errorlevel! equ 0 (
+    echo [OK] Database 'library_db' already exists.
+) else (
+    echo [INFO] Database 'library_db' not found. Creating it...
+    "!PSQL_CMD!" -U postgres -p 5432 -h localhost -c "CREATE DATABASE library_db;" >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo.
+        echo ==================================================
+        echo   [ERROR] Failed to create database 'library_db'.
+        echo   Make sure PostgreSQL service is running.
+        echo   Make sure the password for 'postgres' user is exactly: 1234
+        echo ==================================================
+        echo.
+        goto :FAIL
+    )
+    echo [OK] Database 'library_db' created successfully.
+)
+set PGPASSWORD=
+echo.
+
 :: ---- Step 5: System check ----
 echo Running quick system check...
 python check_env.py
