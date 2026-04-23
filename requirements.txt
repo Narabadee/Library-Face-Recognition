@@ -15,3 +15,6 @@ onnxruntime>=1.16.0
 
 # Production Server
 waitress>=3.0.0
+
+# Hardware Actuator Communication
+requests>=2.31.0
