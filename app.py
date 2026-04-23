@@ -9,6 +9,7 @@ from config import Config
 from database import db, Student, AttendanceLog
 from services.face_service import FaceService
 from services.attendance_service import AttendanceService
+from services.camera import RTSPCamera
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -484,69 +485,9 @@ exit_detector = FaceDetectionOverlay()
 
 
 
-class CameraStream:
-    """RTSP camera stream handler - fixed for FFmpeg threading issues"""
-    def __init__(self, url):
-        self.url = url
-        self.lock = threading.Lock()
-        self.frame = None
-        self.running = False
-        self.thread = None
-        
-    def start(self):
-        with self.lock:
-            if self.running:
-                return
-            self.running = True
-        
-        def capture_loop():
-            # Use CAP_FFMPEG with specific options to avoid async issues
-            import os
-            os.environ['OPENCV_FFMPEG_CAPTURE_OPTIONS'] = 'rtsp_transport;tcp'
-            
-            cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            
-            while self.running:
-                try:
-                    if cap.isOpened():
-                        ret, frame = cap.read()
-                        if ret:
-                            with self.lock:
-                                self.frame = frame
-                        else:
-                            # Reconnect on failure
-                            cap.release()
-                            time.sleep(1)
-                            cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-                            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                    else:
-                        time.sleep(1)
-                        cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                except Exception as e:
-                    print(f"Camera error: {e}")
-                    time.sleep(1)
-            
-            cap.release()
-        
-        self.thread = threading.Thread(target=capture_loop, daemon=True)
-        self.thread.start()
-        
-    def get_frame(self):
-        with self.lock:
-            if self.frame is not None:
-                return self.frame.copy()
-        return None
-    
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join(timeout=2)
-
-# Initialize camera streams (lazy - will start when first accessed)
-entry_camera = CameraStream(Config.ENTRY_CAMERA_URL)
-exit_camera = CameraStream(Config.EXIT_CAMERA_URL)
+# Initialize camera streams using FFmpeg subprocess (lazy - will start when first accessed)
+entry_camera = RTSPCamera(Config.ENTRY_CAMERA_URL)
+exit_camera = RTSPCamera(Config.EXIT_CAMERA_URL)
 
 
 def generate_frames_with_detection(camera, detector, is_entry=True):
@@ -644,12 +585,12 @@ if __name__ == '__main__':
         local_ip = s.getsockname()[0]
         s.close()
         print("\n" + "="*50)
-        print(f"🚀 Face Scanner is running!")
-        print(f"🏠 Local:   http://localhost:5000")
-        print(f"🌐 Network: http://{local_ip}:5000")
+        print(f"[OK] Face Scanner is running!")
+        print(f"[>>] Local:   http://localhost:5000")
+        print(f"[>>] Network: http://{local_ip}:5000")
         print("="*50 + "\n")
     except Exception:
-        print("🚀 Face Scanner is running on http://localhost:5000")
+        print("[OK] Face Scanner is running on http://localhost:5000")
 
     # use_reloader=False prevents duplicate processes that cause FFmpeg issues
     app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False, threaded=True)
