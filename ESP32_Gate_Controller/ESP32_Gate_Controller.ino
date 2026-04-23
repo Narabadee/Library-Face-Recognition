@@ -8,10 +8,8 @@ const char* ssid     = "TP-Link_8054";
 const char* password = "18224818";
 
 // GPIO Pins
-const int LED_PIN   = 14;  // LED แจ้งเตือน (HIGH = ติด)
-const int RELAY_PIN = 26;  // Relay ควบคุมประตู (HIGH = เปิด) — ไม่ใช้ขา 12 (Strapping Pin)
-
-// ==========================================
+const int PIN_12 = 12; // ต่อกับ Relay
+const int PIN_14 = 14; // ต่อกับ LED / Relay
 
 // Auto-reset timer — ประตู + LED ปิดอัตโนมัติหลัง X วินาที
 const unsigned long OPEN_DURATION_MS = 3000;  // 3 วินาที
@@ -24,18 +22,18 @@ WebServer server(80);
 // ── Helper ────────────────────────────────────────────────────────────────
 
 void openGate() {
-  digitalWrite(LED_PIN,   HIGH);  // LED ติด = เปิดประตู
-  digitalWrite(RELAY_PIN, HIGH);  // Relay เปิด
+  digitalWrite(PIN_12, HIGH);
+  digitalWrite(PIN_14, HIGH);
   isOpen   = true;
   openTime = millis();
-  Serial.println("[GATE] OPEN - LED ON, Relay ON");
+  Serial.println("[GATE] OPEN - Pins 12 & 14 HIGH");
 }
 
 void closeGate() {
-  digitalWrite(LED_PIN,   LOW);   // LED ดับ
-  digitalWrite(RELAY_PIN, LOW);   // Relay ปิด
+  digitalWrite(PIN_12, LOW);
+  digitalWrite(PIN_14, LOW);
   isOpen = false;
-  Serial.println("[GATE] CLOSED - LED OFF, Relay OFF");
+  Serial.println("[GATE] CLOSED - Pins 12 & 14 LOW");
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────────
@@ -94,8 +92,8 @@ void handleNotFound() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(LED_PIN,   OUTPUT); digitalWrite(LED_PIN,   LOW);
-  pinMode(RELAY_PIN, OUTPUT); digitalWrite(RELAY_PIN, LOW);
+  pinMode(PIN_12, OUTPUT); digitalWrite(PIN_12, LOW);
+  pinMode(PIN_14, OUTPUT); digitalWrite(PIN_14, LOW);
 
   // Connect WiFi
   Serial.print("Connecting to "); Serial.println(ssid);
