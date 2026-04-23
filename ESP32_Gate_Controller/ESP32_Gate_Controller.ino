@@ -9,7 +9,7 @@ const char* password = "18224818";
 
 // GPIO Pins
 const int LED_PIN   = 14;  // LED แจ้งเตือน (HIGH = ติด)
-const int RELAY_PIN = 12;  // Relay ควบคุมประตู (HIGH = เปิด)
+const int RELAY_PIN = 26;  // Relay ควบคุมประตู (HIGH = เปิด) — ไม่ใช้ขา 12 (Strapping Pin)
 
 // ==========================================
 
