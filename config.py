@@ -15,6 +15,8 @@ class Config:
     ENTRY_CAMERA_URL = os.environ.get('ENTRY_CAMERA_URL') or 'rtsp://admin:rb20dett@192.168.0.107:10554/udp/av0_0'
     EXIT_CAMERA_URL = os.environ.get('EXIT_CAMERA_URL') or 'rtsp://admin:rb20dett@192.168.0.107:10554/udp/av0_0'
     
+    # Gate Controller (ESP32)
+    ESP32_URL = os.environ.get('ESP32_URL') or 'http://192.168.0.122'
     
     # Ensure directories exist
     @staticmethod

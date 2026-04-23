@@ -10,6 +10,8 @@ from database import db, Student, AttendanceLog
 from services.face_service import FaceService
 from services.attendance_service import AttendanceService
 from services.camera import RTSPCamera
+import requests
+import threading
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -317,9 +319,26 @@ def api_checkin():
     
     success, message, log = AttendanceService.check_in(student_id)
     
+    def notify_esp_fail():
+        try:
+            requests.post(f"{Config.ESP32_URL}/trigger/fail", timeout=2)
+        except:
+            pass
+
+    def notify_esp_success():
+        try:
+            requests.post(f"{Config.ESP32_URL}/trigger/success", timeout=2)
+        except:
+            pass
+
     if not success:
+        # ส่ง trigger fail ไป ESP32 แบบ background
+        threading.Thread(target=notify_esp_fail, daemon=True).start()
         return jsonify({'success': False, 'message': message}), 400
         
+    # ส่ง trigger success ไป ESP32 แบบ background
+    threading.Thread(target=notify_esp_success, daemon=True).start()
+    
     return jsonify({
         'success': True,
         'message': f'Check-in สำเร็จ เวลา {log.check_in.strftime("%H:%M:%S")}',
@@ -335,14 +354,23 @@ def api_checkout():
     
     success, message, log = AttendanceService.check_out(student_id)
     
+    def notify_esp_fail():
+        try:
+            requests.post(f"{Config.ESP32_URL}/trigger/fail", timeout=2)
+        except:
+            pass
+
+    def notify_esp_success():
+        try:
+            requests.post(f"{Config.ESP32_URL}/trigger/success", timeout=2)
+        except:
+            pass
+
     if not success:
+        threading.Thread(target=notify_esp_fail, daemon=True).start()
         return jsonify({'success': False, 'message': message}), 400
         
-    return jsonify({
-        'success': True,
-        'message': f'Check-out สำเร็จ เวลา {log.check_out.strftime("%H:%M:%S")}',
-        'log': log.to_dict()
-    })
+    threading.Thread(target=notify_esp_success, daemon=True).start()
     
     return jsonify({
         'success': True,
