@@ -261,6 +261,53 @@ if !errorlevel! equ 0 (
 set PGPASSWORD=
 echo.
 
+:: ---- Step 4.7: Check FFmpeg (required for RTSP) ----
+echo [STEP *] Checking FFmpeg installation...
+where ffmpeg >nul 2>&1
+if !errorlevel! equ 0 (
+    echo [OK] FFmpeg found in PATH.
+    goto :FFMPEG_OK
+)
+
+:: Check common WinGet location for Gyan.FFmpeg
+set "FFMPEG_FOUND=0"
+for /d %%d in ("%USERPROFILE%\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg*") do (
+    for /d %%f in ("%%d\ffmpeg-*") do (
+        if exist "%%f\bin\ffmpeg.exe" (
+            echo [OK] FFmpeg found in WinGet folder.
+            set "FFMPEG_FOUND=1"
+            goto :FFMPEG_OK
+        )
+    )
+)
+
+if "!FFMPEG_FOUND!"=="0" (
+    echo [WARNING] FFmpeg not found! Required for camera streaming.
+    echo [INFO] Attempting to install FFmpeg via winget...
+    winget --version >nul 2>&1
+    if !errorlevel! neq 0 (
+        echo [ERROR] winget not found. Please install FFmpeg manually from https://ffmpeg.org/
+        goto :FAIL
+    )
+    
+    winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements
+    if !errorlevel! equ 0 (
+        echo.
+        echo ==================================================
+        echo   [OK] FFmpeg installed successfully!
+        echo   IMPORTANT: Please CLOSE this window and RESTART
+        echo   RUN_WINDOWS.bat to apply system changes.
+        echo ==================================================
+        pause
+        exit /b
+    )
+    echo [ERROR] FFmpeg installation failed.
+    goto :FAIL
+)
+
+:FFMPEG_OK
+echo.
+
 :: ---- Step 5: System check ----
 echo Running quick system check...
 python check_env.py
