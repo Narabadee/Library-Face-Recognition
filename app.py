@@ -306,8 +306,44 @@ def api_scan():
             with _scan_cache_lock:
                 _scan_cache[student_id] = (result, now + SCAN_CACHE_TTL)
             return jsonify(result)
+            
+    # Check if a face was actually detected even if not recognized
+    face_detected = False
+    if confidence > 0.0:
+        face_detected = True
+    else:
+        import cv2
+        import numpy as np
+        import base64 as b64module
+        try:
+            b64_data = face_image.split(',', 1)[1] if ',' in face_image else face_image
+            img_bytes = b64module.b64decode(b64_data)
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            cv_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if cv_image is not None:
+                h, w = cv_image.shape[:2]
+                max_dim = 320
+                if max(h, w) > max_dim:
+                    scale = max_dim / max(h, w)
+                    cv_image = cv2.resize(cv_image, (int(w * scale), int(h * scale)))
+                detections = face_service.engine.detect_faces(cv_image)
+                if detections:
+                    face_detected = True
+        except Exception as e:
+            print(f"Error detecting face in scan: {e}")
+
+    if face_detected:
+        def notify_esp_fail():
+            try:
+                import requests
+                from config import Config
+                requests.post(f"{Config.ESP32_URL}/trigger/fail", timeout=2)
+            except Exception as e:
+                print(f"Failed to trigger ESP32 fail: {e}")
+        import threading
+        threading.Thread(target=notify_esp_fail, daemon=True).start()
     
-    return jsonify({'success': False, 'message': 'Unknown face'})
+    return jsonify({'success': False, 'message': 'Unknown face', 'face_detected': face_detected})
 
 
 

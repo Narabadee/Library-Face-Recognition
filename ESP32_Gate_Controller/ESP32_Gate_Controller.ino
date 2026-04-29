@@ -2,43 +2,45 @@
 #include <WebServer.h>
 
 // ==========================================
-// ⚠️ CHANGE THESE VARIABLES ⚠️
+// ⚠️ WiFi Configuration ⚠️
 // ==========================================
 const char* ssid     = "TP-Link_8054";
 const char* password = "18224818";
 
-// GPIO Pins
-const int PIN_12 = 12; // ต่อกับ Relay
-const int PIN_14 = 14; // ต่อกับ LED / Relay
+// GPIO Pins (Active LOW for Relays/LEDs)
+const int PIN_RED   = 14; // Red LED (Waiting/Idle)
+const int PIN_GREEN = 13; // Green LED (Success/Gate)
 
-// Auto-reset timer — ประตู + LED ปิดอัตโนมัติหลัง X วินาที
-const unsigned long OPEN_DURATION_MS = 3000;  // 3 วินาที
+// Auto-reset timer — 3 seconds duration
+const unsigned long OPEN_DURATION_MS = 3000;
 
 unsigned long openTime  = 0;
 bool isOpen = false;
 
 WebServer server(80);
 
-// ── Helper ────────────────────────────────────────────────────────────────
+// ── Helper Logic ──────────────────────────────────────────────────────────
 
-void openGate() {
-  digitalWrite(PIN_12, HIGH);
-  digitalWrite(PIN_14, HIGH);
-  isOpen   = true;
-  openTime = millis();
-  Serial.println("[GATE] OPEN - Pins 12 & 14 HIGH");
+// State: Waiting for check-in (Idle)
+void setIdleState() {
+  digitalWrite(PIN_RED,   LOW);  // Red ON (Active LOW)
+  digitalWrite(PIN_GREEN, HIGH); // Green OFF
+  isOpen = false;
+  Serial.println("[STATE] Waiting for check-in - Red ON");
 }
 
-void closeGate() {
-  digitalWrite(PIN_12, LOW);
-  digitalWrite(PIN_14, LOW);
-  isOpen = false;
-  Serial.println("[GATE] CLOSED - Pins 12 & 14 LOW");
+// State: Check-in Successful
+void openGate() {
+  digitalWrite(PIN_RED,   HIGH); // Red OFF
+  digitalWrite(PIN_GREEN, LOW);  // Green ON (Active LOW)
+  isOpen   = true;
+  openTime = millis();
+  Serial.println("[STATE] Success! - Green ON");
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────────
 
-// POST /trigger/success — จดจำใบหน้าได้ → เปิดประตู + LED ติด
+// POST /trigger/success — Success detected
 void handleSuccess() {
   if (server.method() != HTTP_POST) {
     server.send(405, "text/plain", "Method Not Allowed"); return;
@@ -47,16 +49,16 @@ void handleSuccess() {
   server.send(200, "application/json", "{\"status\":\"success_acknowledged\"}");
 }
 
-// POST /trigger/fail — จดจำไม่ได้ → ประตูปิด (ไม่ทำอะไร)
+// POST /trigger/fail — Recognition failed (Remain Idle or reset to Idle)
 void handleFail() {
   if (server.method() != HTTP_POST) {
     server.send(405, "text/plain", "Method Not Allowed"); return;
   }
-  Serial.println("[FAIL] Face not recognized - door stays closed");
+  setIdleState(); // Ensure we are in Red ON state
   server.send(200, "application/json", "{\"status\":\"fail_acknowledged\"}");
 }
 
-// POST /trigger/open — admin บังคับเปิดประตู
+// POST /trigger/open — Manual open
 void handleOpen() {
   if (server.method() != HTTP_POST) {
     server.send(405, "text/plain", "Method Not Allowed"); return;
@@ -65,21 +67,19 @@ void handleOpen() {
   server.send(200, "application/json", "{\"status\":\"door_opened\"}");
 }
 
-// POST /trigger/close — admin บังคับปิดประตู
+// POST /trigger/close — Manual close (Idle)
 void handleClose() {
   if (server.method() != HTTP_POST) {
     server.send(405, "text/plain", "Method Not Allowed"); return;
   }
-  closeGate();
+  setIdleState();
   server.send(200, "application/json", "{\"status\":\"door_closed\"}");
 }
 
-// GET /status — Flask เช็คว่า ESP32 ออนไลน์อยู่ไหม
+// GET /status
 void handleStatus() {
   String ip   = WiFi.localIP().toString();
-  String rssi = String(WiFi.RSSI());
-  String json = "{\"online\":true,\"ip\":\"" + ip + "\",\"rssi\":" + rssi +
-                ",\"relay\":" + (isOpen ? "true" : "false") + "}";
+  String json = "{\"online\":true,\"ip\":\"" + ip + "\",\"state\":\"" + (isOpen ? "success" : "idle") + "\"}";
   server.send(200, "application/json", json);
 }
 
@@ -92,8 +92,12 @@ void handleNotFound() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PIN_12, OUTPUT); digitalWrite(PIN_12, LOW);
-  pinMode(PIN_14, OUTPUT); digitalWrite(PIN_14, LOW);
+  // Initialize Pins
+  pinMode(PIN_RED,   OUTPUT);
+  pinMode(PIN_GREEN, OUTPUT);
+
+  // Start in Idle State (Red ON)
+  setIdleState();
 
   // Connect WiFi
   Serial.print("Connecting to "); Serial.println(ssid);
@@ -102,8 +106,7 @@ void setup() {
     delay(500); Serial.print(".");
   }
   Serial.println("\nWiFi connected!");
-  Serial.print("ESP32 IP Address: ");
-  Serial.println(WiFi.localIP()); // <<< ใส่ IP นี้ใน config.py
+  Serial.print("IP: "); Serial.println(WiFi.localIP());
 
   // Routes
   server.on("/trigger/success", handleSuccess);
@@ -114,7 +117,7 @@ void setup() {
   server.onNotFound(handleNotFound);
 
   server.begin();
-  Serial.println("HTTP server started. Ready!");
+  Serial.println("HTTP server started.");
 }
 
 // ── Loop ──────────────────────────────────────────────────────────────────
@@ -122,8 +125,8 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  // Auto-close ประตู + ดับ LED หลัง OPEN_DURATION_MS
+  // Auto-reset to Idle after 3 seconds
   if (isOpen && (millis() - openTime >= OPEN_DURATION_MS)) {
-    closeGate();
+    setIdleState();
   }
 }
