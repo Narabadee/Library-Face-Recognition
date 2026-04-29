@@ -12,8 +12,8 @@ class Config:
     FACES_FOLDER = os.path.join(BASE_DIR, 'data', 'faces')
     
     # RTSP Camera URLs
-    ENTRY_CAMERA_URL = os.environ.get('ENTRY_CAMERA_URL') or 'rtsp://admin:rb20dett@192.168.0.107:10554/udp/av0_0'
-    EXIT_CAMERA_URL = os.environ.get('EXIT_CAMERA_URL') or 'rtsp://admin:rb20dett@192.168.0.107:10554/udp/av0_0'
+    ENTRY_CAMERA_URL = os.environ.get('ENTRY_CAMERA_URL') or 'rtsp://hcu-libraly:hculibraly123@192.168.1.197:554/stream1'
+    EXIT_CAMERA_URL = os.environ.get('EXIT_CAMERA_URL') or 'rtsp://hcu-libraly:hculibraly123@192.168.1.197:554/stream1'
     
     # Gate Controller (ESP32)
     ESP32_URL = os.environ.get('ESP32_URL') or 'http://192.168.0.119'

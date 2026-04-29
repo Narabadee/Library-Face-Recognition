@@ -5,6 +5,7 @@ RTSPCamera - FFmpeg subprocess-based RTSP stream reader
 บางรุ่นไม่รองรับ OpenCV built-in FFmpeg decoder
 """
 
+import os
 import subprocess
 import threading
 import numpy as np
@@ -24,17 +25,25 @@ def find_ffmpeg():
     path = shutil.which("ffmpeg")
     if path:
         return path
+    
     # Common install paths on Windows
     candidates = [
         r"C:\Program Files\FFmpeg\bin\ffmpeg.exe",
         r"C:\ffmpeg\bin\ffmpeg.exe",
-        # WinGet install path (Gyan.FFmpeg)
-        r"C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe",
     ]
-    import os
+    
+    # Add WinGet path dynamically for the current user
+    user_home = os.path.expanduser("~")
+    winget_path = os.path.join(
+        user_home, 
+        r"AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
+    )
+    candidates.append(winget_path)
+    
     for c in candidates:
         if os.path.isfile(c):
             return c
+            
     return "ffmpeg"  # fallback, hope it's in PATH
 
 
